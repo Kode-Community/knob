@@ -1,8 +1,12 @@
-// This is a complete backward incompatible rewrite of https://github.com/tsoding/nobuild
+// Alexey Kutepov: This is a complete backward incompatible rewrite of https://github.com/tsoding/nobuild
 // because I'm really unhappy with the direction it is going. It's gonna sit in this repo
 // until it's matured enough and then I'll probably extract it to its own repo.
 
+// This is a complete backward incompatible overwrite of https://github.com/tsoding/musializer/blob/master/src/nob.h
+// because I intend on using it for "serious" programming projects(i.e. gamedev/edutainement)
+
 // Copyright 2023 Alexey Kutepov <reximkut@gmail.com>
+// Copyright 2023 Jean-Sébastien Nadeau <mundusnine@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -23,12 +27,12 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef NOB_H_
-#define NOB_H_
+#ifndef KNOB_H_
+#define KNOB_H_
 
-#define NOB_ASSERT assert
-#define NOB_REALLOC realloc
-#define NOB_FREE free
+#define KNOB_ASSERT assert
+#define KNOB_REALLOC realloc
+#define KNOB_FREE free
 
 #include <assert.h>
 #include <stdbool.h>
@@ -53,78 +57,78 @@
 #endif
 
 #ifdef _WIN32
-#    define NOB_LINE_END "\r\n"
+#    define KNOB_LINE_END "\r\n"
 #else
-#    define NOB_LINE_END "\n"
+#    define KNOB_LINE_END "\n"
 #endif
 
-#define NOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
-#define NOB_ARRAY_GET(array, index) \
-    (NOB_ASSERT(index >= 0), NOB_ASSERT(index < NOB_ARRAY_LEN(array)), array[index])
+#define KNOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
+#define KNOB_ARRAY_GET(array, index) \
+    (KNOB_ASSERT(index >= 0), KNOB_ASSERT(index < KNOB_ARRAY_LEN(array)), array[index])
 
 typedef enum {
-    NOB_INFO,
-    NOB_WARNING,
-    NOB_ERROR,
-} Nob_Log_Level;
+    KNOB_INFO,
+    KNOB_WARNING,
+    KNOB_ERROR,
+} Knob_Log_Level;
 
-void nob_log(Nob_Log_Level level, const char *fmt, ...);
+void knob_log(Knob_Log_Level level, const char *fmt, ...);
 
 // It is an equivalent of shift command from bash. It basically pops a command line
 // argument from the beginning.
-char *nob_shift_args(int *argc, char ***argv);
+char *knob_shift_args(int *argc, char ***argv);
 
 typedef struct {
     const char **items;
     size_t count;
     size_t capacity;
-} Nob_File_Paths;
+} Knob_File_Paths;
 
 typedef enum {
-    NOB_FILE_REGULAR = 0,
-    NOB_FILE_DIRECTORY,
-    NOB_FILE_SYMLINK,
-    NOB_FILE_OTHER,
-} Nob_File_Type;
+    KNOB_FILE_REGULAR = 0,
+    KNOB_FILE_DIRECTORY,
+    KNOB_FILE_SYMLINK,
+    KNOB_FILE_OTHER,
+} Knob_File_Type;
 
-bool nob_mkdir_if_not_exists(const char *path);
-bool nob_copy_file(const char *src_path, const char *dst_path);
-bool nob_copy_directory_recursively(const char *src_path, const char *dst_path);
-bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children);
-bool nob_write_entire_file(const char *path, void *data, size_t size);
-Nob_File_Type nob_get_file_type(const char *path);
+bool knob_mkdir_if_not_exists(const char *path);
+bool knob_copy_file(const char *src_path, const char *dst_path);
+bool knob_copy_directory_recursively(const char *src_path, const char *dst_path);
+bool knob_read_entire_dir(const char *parent, Knob_File_Paths *children);
+bool knob_write_entire_file(const char *path, void *data, size_t size);
+Knob_File_Type knob_get_file_type(const char *path);
 
-#define nob_return_defer(value) do { result = (value); goto defer; } while(0)
+#define knob_return_defer(value) do { result = (value); goto defer; } while(0)
 
 // Initial capacity of a dynamic array
-#define NOB_DA_INIT_CAP 256
+#define KNOB_DA_INIT_CAP 256
 
 // Append an item to a dynamic array
-#define nob_da_append(da, item)                                                          \
+#define knob_da_append(da, item)                                                          \
     do {                                                                                 \
         if ((da)->count >= (da)->capacity) {                                             \
-            (da)->capacity = (da)->capacity == 0 ? NOB_DA_INIT_CAP : (da)->capacity*2;   \
-            (da)->items = NOB_REALLOC((da)->items, (da)->capacity*sizeof(*(da)->items)); \
-            NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                       \
+            (da)->capacity = (da)->capacity == 0 ? KNOB_DA_INIT_CAP : (da)->capacity*2;   \
+            (da)->items = KNOB_REALLOC((da)->items, (da)->capacity*sizeof(*(da)->items)); \
+            KNOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                       \
         }                                                                                \
                                                                                          \
         (da)->items[(da)->count++] = (item);                                             \
     } while (0)
 
-#define nob_da_free(da) NOB_FREE((da).items)
+#define knob_da_free(da) KNOB_FREE((da).items)
 
 // Append several items to a dynamic array
-#define nob_da_append_many(da, new_items, new_items_count)                                  \
+#define knob_da_append_many(da, new_items, new_items_count)                                  \
     do {                                                                                    \
         if ((da)->count + new_items_count > (da)->capacity) {                               \
             if ((da)->capacity == 0) {                                                      \
-                (da)->capacity = NOB_DA_INIT_CAP;                                           \
+                (da)->capacity = KNOB_DA_INIT_CAP;                                           \
             }                                                                               \
             while ((da)->count + new_items_count > (da)->capacity) {                        \
                 (da)->capacity *= 2;                                                        \
             }                                                                               \
-            (da)->items = NOB_REALLOC((da)->items, (da)->capacity*sizeof(*(da)->items)); \
-            NOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                          \
+            (da)->items = KNOB_REALLOC((da)->items, (da)->capacity*sizeof(*(da)->items)); \
+            KNOB_ASSERT((da)->items != NULL && "Buy more RAM lol");                          \
         }                                                                                   \
         memcpy((da)->items + (da)->count, new_items, new_items_count*sizeof(*(da)->items)); \
         (da)->count += new_items_count;                                                     \
@@ -134,100 +138,100 @@ typedef struct {
     char *items;
     size_t count;
     size_t capacity;
-} Nob_String_Builder;
+} Knob_String_Builder;
 
-bool nob_read_entire_file(const char *path, Nob_String_Builder *sb);
+bool knob_read_entire_file(const char *path, Knob_String_Builder *sb);
 
 // Append a sized buffer to a string builder
-#define nob_sb_append_buf(sb, buf, size) nob_da_append_many(sb, buf, size)
+#define knob_sb_append_buf(sb, buf, size) knob_da_append_many(sb, buf, size)
 
 // Append a NULL-terminated string to a string builder
-#define nob_sb_append_cstr(sb, cstr)  \
+#define knob_sb_append_cstr(sb, cstr)  \
     do {                              \
         const char *s = (cstr);       \
         size_t n = strlen(s);         \
-        nob_da_append_many(sb, s, n); \
+        knob_da_append_many(sb, s, n); \
     } while (0)
 
 // Append a single NULL character at the end of a string builder. So then you can
 // use it a NULL-terminated C string
-#define nob_sb_append_null(sb) nob_da_append_many(sb, "", 1)
+#define knob_sb_append_null(sb) knob_da_append_many(sb, "", 1)
 
 // Free the memory allocated by a string builder
-#define nob_sb_free(sb) NOB_FREE((sb).items)
+#define knob_sb_free(sb) KNOB_FREE((sb).items)
 
 // Process handle
 #ifdef _WIN32
-typedef HANDLE Nob_Proc;
-#define NOB_INVALID_PROC INVALID_HANDLE_VALUE
+typedef HANDLE Knob_Proc;
+#define KNOB_INVALID_PROC INVALID_HANDLE_VALUE
 #else
-typedef int Nob_Proc;
-#define NOB_INVALID_PROC (-1)
+typedef int Knob_Proc;
+#define KNOB_INVALID_PROC (-1)
 #endif // _WIN32
 
 typedef struct {
-    Nob_Proc *items;
+    Knob_Proc *items;
     size_t count;
     size_t capacity;
-} Nob_Procs;
+} Knob_Procs;
 
-bool nob_procs_wait(Nob_Procs procs);
+bool knob_procs_wait(Knob_Procs procs);
 
 // Wait until the process has finished
-bool nob_proc_wait(Nob_Proc proc);
+bool knob_proc_wait(Knob_Proc proc);
 
-// A command - the main workhorse of Nob. Nob is all about building commands an running them
+// A command - the main workhorse of Knob. Knob is all about building commands an running them
 typedef struct {
     const char **items;
     size_t count;
     size_t capacity;
-} Nob_Cmd;
+} Knob_Cmd;
 
 // Render a string representation of a command into a string builder. Keep in mind the the
-// string builder is not NULL-terminated by default. Use nob_sb_append_null if you plan to
+// string builder is not NULL-terminated by default. Use knob_sb_append_null if you plan to
 // use it as a C string.
-void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render);
+void knob_cmd_render(Knob_Cmd cmd, Knob_String_Builder *render);
 
-#define nob_cmd_append(cmd, ...) \
-    nob_da_append_many(cmd, ((const char*[]){__VA_ARGS__}), (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)))
+#define knob_cmd_append(cmd, ...) \
+    knob_da_append_many(cmd, ((const char*[]){__VA_ARGS__}), (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)))
 
 // Free all the memory allocated by command arguments
-#define nob_cmd_free(cmd) NOB_FREE(cmd.items)
+#define knob_cmd_free(cmd) KNOB_FREE(cmd.items)
 
 // Run command asynchronously
-Nob_Proc nob_cmd_run_async(Nob_Cmd cmd);
+Knob_Proc knob_cmd_run_async(Knob_Cmd cmd);
 
 // Run command synchronously
-bool nob_cmd_run_sync(Nob_Cmd cmd);
+bool knob_cmd_run_sync(Knob_Cmd cmd);
 
-#ifndef NOB_TEMP_CAPACITY
-#define NOB_TEMP_CAPACITY (8*1024*1024)
-#endif // NOB_TEMP_CAPACITY
-char *nob_temp_strdup(const char *cstr);
-void *nob_temp_alloc(size_t size);
-char *nob_temp_sprintf(const char *format, ...);
-void nob_temp_reset(void);
-size_t nob_temp_save(void);
-void nob_temp_rewind(size_t checkpoint);
+#ifndef KNOB_TEMP_CAPACITY
+#define KNOB_TEMP_CAPACITY (8*1024*1024)
+#endif // KNOB_TEMP_CAPACITY
+char *knob_temp_strdup(const char *cstr);
+void *knob_temp_alloc(size_t size);
+char *knob_temp_sprintf(const char *format, ...);
+void knob_temp_reset(void);
+size_t knob_temp_save(void);
+void knob_temp_rewind(size_t checkpoint);
 
 int is_path1_modified_after_path2(const char *path1, const char *path2);
-bool nob_rename(const char *old_path, const char *new_path);
-int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
-int nob_needs_rebuild1(const char *output_path, const char *input_path);
-int nob_file_exists(const char *file_path);
+bool knob_rename(const char *old_path, const char *new_path);
+int knob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
+int knob_needs_rebuild1(const char *output_path, const char *input_path);
+int knob_file_exists(const char *file_path);
 
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
-#ifndef NOB_REBUILD_URSELF
+#ifndef KNOB_REBUILD_URSELF
 #  if _WIN32
 #    if defined(__GNUC__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-o", binary_path, source_path
+#       define KNOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-o", binary_path, source_path
 #    elif defined(__clang__)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
+#       define KNOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
 #    elif defined(_MSC_VER)
-#       define NOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", source_path
+#       define KNOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", source_path
 #    endif
 #  else
-#    define NOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
+#    define KNOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
 #  endif
 #endif
 
@@ -253,33 +257,33 @@ int nob_file_exists(const char *file_path);
 //   do not recommend since the whole idea of nobuild is to keep the process of bootstrapping
 //   as simple as possible and doing all of the actual work inside of the nobuild)
 //
-#define NOB_GO_REBUILD_URSELF(argc, argv)                                                    \
+#define KNOB_GO_REBUILD_URSELF(argc, argv)                                                    \
     do {                                                                                     \
         const char *source_path = __FILE__;                                                  \
         assert(argc >= 1);                                                                   \
         const char *binary_path = argv[0];                                                   \
                                                                                              \
-        int rebuild_is_needed = nob_needs_rebuild(binary_path, &source_path, 1);             \
+        int rebuild_is_needed = knob_needs_rebuild(binary_path, &source_path, 1);             \
         if (rebuild_is_needed < 0) exit(1);                                                  \
         if (rebuild_is_needed) {                                                             \
-            Nob_String_Builder sb = {0};                                                     \
-            nob_sb_append_cstr(&sb, binary_path);                                            \
-            nob_sb_append_cstr(&sb, ".old");                                                 \
-            nob_sb_append_null(&sb);                                                         \
+            Knob_String_Builder sb = {0};                                                     \
+            knob_sb_append_cstr(&sb, binary_path);                                            \
+            knob_sb_append_cstr(&sb, ".old");                                                 \
+            knob_sb_append_null(&sb);                                                         \
                                                                                              \
-            if (!nob_rename(binary_path, sb.items)) exit(1);                                 \
-            Nob_Cmd rebuild = {0};                                                           \
-            nob_cmd_append(&rebuild, NOB_REBUILD_URSELF(binary_path, source_path));          \
-            bool rebuild_succeeded = nob_cmd_run_sync(rebuild);                              \
-            nob_cmd_free(rebuild);                                                           \
+            if (!knob_rename(binary_path, sb.items)) exit(1);                                 \
+            Knob_Cmd rebuild = {0};                                                           \
+            knob_cmd_append(&rebuild, KNOB_REBUILD_URSELF(binary_path, source_path));          \
+            bool rebuild_succeeded = knob_cmd_run_sync(rebuild);                              \
+            knob_cmd_free(rebuild);                                                           \
             if (!rebuild_succeeded) {                                                        \
-                nob_rename(sb.items, binary_path);                                           \
+                knob_rename(sb.items, binary_path);                                           \
                 exit(1);                                                                     \
             }                                                                                \
                                                                                              \
-            Nob_Cmd cmd = {0};                                                               \
-            nob_da_append_many(&cmd, argv, argc);                                            \
-            if (!nob_cmd_run_sync(cmd)) exit(1);                                             \
+            Knob_Cmd cmd = {0};                                                               \
+            knob_da_append_many(&cmd, argv, argc);                                            \
+            if (!knob_cmd_run_sync(cmd)) exit(1);                                             \
             exit(0);                                                                         \
         }                                                                                    \
     } while(0)
@@ -288,15 +292,15 @@ int nob_file_exists(const char *file_path);
 typedef struct {
     size_t count;
     const char *data;
-} Nob_String_View;
+} Knob_String_View;
 
-const char *nob_temp_sv_to_cstr(Nob_String_View sv);
+const char *knob_temp_sv_to_cstr(Knob_String_View sv);
 
-Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim);
-Nob_String_View nob_sv_trim(Nob_String_View sv);
-bool nob_sv_eq(Nob_String_View a, Nob_String_View b);
-Nob_String_View nob_sv_from_cstr(const char *cstr);
-Nob_String_View nob_sv_from_parts(const char *data, size_t count);
+Knob_String_View knob_sv_chop_by_delim(Knob_String_View *sv, char delim);
+Knob_String_View knob_sv_trim(Knob_String_View sv);
+bool knob_sv_eq(Knob_String_View a, Knob_String_View b);
+Knob_String_View knob_sv_from_cstr(const char *cstr);
+Knob_String_View knob_sv_from_parts(const char *data, size_t count);
 
 // printf macros for String_View
 #ifndef SV_Fmt
@@ -366,14 +370,14 @@ int closedir(DIR *dirp);
 #endif // _WIN32
 // minirent.h HEADER END ////////////////////////////////////////
 
-#endif // NOB_H_
+#endif // KNOB_H_
 
-#ifdef NOB_IMPLEMENTATION
+#ifdef KNOB_IMPLEMENTATION
 
-static size_t nob_temp_size = 0;
-static char nob_temp[NOB_TEMP_CAPACITY] = {0};
+static size_t knob_temp_size = 0;
+static char knob_temp[KNOB_TEMP_CAPACITY] = {0};
 
-bool nob_mkdir_if_not_exists(const char *path)
+bool knob_mkdir_if_not_exists(const char *path)
 {
 #ifdef _WIN32
     int result = mkdir(path);
@@ -382,23 +386,23 @@ bool nob_mkdir_if_not_exists(const char *path)
 #endif
     if (result < 0) {
         if (errno == EEXIST) {
-            nob_log(NOB_INFO, "directory `%s` already exists", path);
+            knob_log(KNOB_INFO, "directory `%s` already exists", path);
             return true;
         }
-        nob_log(NOB_ERROR, "could not create directory `%s`: %s", path, strerror(errno));
+        knob_log(KNOB_ERROR, "could not create directory `%s`: %s", path, strerror(errno));
         return false;
     }
 
-    nob_log(NOB_INFO, "created directory `%s`", path);
+    knob_log(KNOB_INFO, "created directory `%s`", path);
     return true;
 }
 
-bool nob_copy_file(const char *src_path, const char *dst_path)
+bool knob_copy_file(const char *src_path, const char *dst_path)
 {
-    nob_log(NOB_INFO, "copying %s -> %s", src_path, dst_path);
+    knob_log(KNOB_INFO, "copying %s -> %s", src_path, dst_path);
 #ifdef _WIN32
     if (!CopyFile(src_path, dst_path, FALSE)) {
-        nob_log(NOB_ERROR, "Could not copy file: %lu", GetLastError());
+        knob_log(KNOB_ERROR, "Could not copy file: %lu", GetLastError());
         return false;
     }
     return true;
@@ -406,41 +410,41 @@ bool nob_copy_file(const char *src_path, const char *dst_path)
     int src_fd = -1;
     int dst_fd = -1;
     size_t buf_size = 32*1024;
-    char *buf = NOB_REALLOC(NULL, buf_size);
-    NOB_ASSERT(buf != NULL && "Buy more RAM lol!!");
+    char *buf = KNOB_REALLOC(NULL, buf_size);
+    KNOB_ASSERT(buf != NULL && "Buy more RAM lol!!");
     bool result = true;
 
     src_fd = open(src_path, O_RDONLY);
     if (src_fd < 0) {
-        nob_log(NOB_ERROR, "Could not open file %s: %s", src_path, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not open file %s: %s", src_path, strerror(errno));
+        knob_return_defer(false);
     }
 
     struct stat src_stat;
     if (fstat(src_fd, &src_stat) < 0) {
-        nob_log(NOB_ERROR, "Could not get mode of file %s: %s", src_path, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not get mode of file %s: %s", src_path, strerror(errno));
+        knob_return_defer(false);
     }
 
     dst_fd = open(dst_path, O_CREAT | O_TRUNC | O_WRONLY, src_stat.st_mode);
     if (dst_fd < 0) {
-        nob_log(NOB_ERROR, "Could not create file %s: %s", dst_path, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not create file %s: %s", dst_path, strerror(errno));
+        knob_return_defer(false);
     }
 
     for (;;) {
         ssize_t n = read(src_fd, buf, buf_size);
         if (n == 0) break;
         if (n < 0) {
-            nob_log(NOB_ERROR, "Could not read from file %s: %s", src_path, strerror(errno));
-            nob_return_defer(false);
+            knob_log(KNOB_ERROR, "Could not read from file %s: %s", src_path, strerror(errno));
+            knob_return_defer(false);
         }
         char *buf2 = buf;
         while (n > 0) {
             ssize_t m = write(dst_fd, buf2, n);
             if (m < 0) {
-                nob_log(NOB_ERROR, "Could not write to file %s: %s", dst_path, strerror(errno));
-                nob_return_defer(false);
+                knob_log(KNOB_ERROR, "Could not write to file %s: %s", dst_path, strerror(errno));
+                knob_return_defer(false);
             }
             n    -= m;
             buf2 += m;
@@ -455,34 +459,34 @@ defer:
 #endif
 }
 
-void nob_cmd_render(Nob_Cmd cmd, Nob_String_Builder *render)
+void knob_cmd_render(Knob_Cmd cmd, Knob_String_Builder *render)
 {
     for (size_t i = 0; i < cmd.count; ++i) {
         const char *arg = cmd.items[i];
         if (arg == NULL) break;
-        if (i > 0) nob_sb_append_cstr(render, " ");
+        if (i > 0) knob_sb_append_cstr(render, " ");
         if (!strchr(arg, ' ')) {
-            nob_sb_append_cstr(render, arg);
+            knob_sb_append_cstr(render, arg);
         } else {
-            nob_da_append(render, '\'');
-            nob_sb_append_cstr(render, arg);
-            nob_da_append(render, '\'');
+            knob_da_append(render, '\'');
+            knob_sb_append_cstr(render, arg);
+            knob_da_append(render, '\'');
         }
     }
 }
 
-Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
+Knob_Proc knob_cmd_run_async(Knob_Cmd cmd)
 {
     if (cmd.count < 1) {
-        nob_log(NOB_ERROR, "Could not run empty command");
-        return NOB_INVALID_PROC;
+        knob_log(KNOB_ERROR, "Could not run empty command");
+        return KNOB_INVALID_PROC;
     }
 
-    Nob_String_Builder sb = {0};
-    nob_cmd_render(cmd, &sb);
-    nob_sb_append_null(&sb);
-    nob_log(NOB_INFO, "CMD: %s", sb.items);
-    nob_sb_free(sb);
+    Knob_String_Builder sb = {0};
+    knob_cmd_render(cmd, &sb);
+    knob_sb_append_null(&sb);
+    knob_log(KNOB_INFO, "CMD: %s", sb.items);
+    knob_sb_free(sb);
     memset(&sb, 0, sizeof(sb));
 
 #ifdef _WIN32
@@ -504,14 +508,14 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
 
     // TODO: use a more reliable rendering of the command instead of cmd_render
     // cmd_render is for logging primarily
-    nob_cmd_render(cmd, &sb);
-    nob_sb_append_null(&sb);
+    knob_cmd_render(cmd, &sb);
+    knob_sb_append_null(&sb);
     BOOL bSuccess = CreateProcessA(NULL, sb.items, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo);
-    nob_sb_free(sb);
+    knob_sb_free(sb);
 
     if (!bSuccess) {
-        nob_log(NOB_ERROR, "Could not create child process: %lu", GetLastError());
-        return NOB_INVALID_PROC;
+        knob_log(KNOB_ERROR, "Could not create child process: %lu", GetLastError());
+        return KNOB_INVALID_PROC;
     }
 
     CloseHandle(piProcInfo.hThread);
@@ -520,40 +524,40 @@ Nob_Proc nob_cmd_run_async(Nob_Cmd cmd)
 #else
     pid_t cpid = fork();
     if (cpid < 0) {
-        nob_log(NOB_ERROR, "Could not fork child process: %s", strerror(errno));
-        return NOB_INVALID_PROC;
+        knob_log(KNOB_ERROR, "Could not fork child process: %s", strerror(errno));
+        return KNOB_INVALID_PROC;
     }
 
     if (cpid == 0) {
         // NOTE: This leaks a bit of memory in the child process.
         // But do we actually care? It's a one off leak anyway...
-        Nob_Cmd cmd_null = {0};
-        nob_da_append_many(&cmd_null, cmd.items, cmd.count);
-        nob_cmd_append(&cmd_null, NULL);
+        Knob_Cmd cmd_null = {0};
+        knob_da_append_many(&cmd_null, cmd.items, cmd.count);
+        knob_cmd_append(&cmd_null, NULL);
 
         if (execvp(cmd.items[0], (char * const*) cmd_null.items) < 0) {
-            nob_log(NOB_ERROR, "Could not exec child process: %s", strerror(errno));
+            knob_log(KNOB_ERROR, "Could not exec child process: %s", strerror(errno));
             exit(1);
         }
-        NOB_ASSERT(0 && "unreachable");
+        KNOB_ASSERT(0 && "unreachable");
     }
 
     return cpid;
 #endif
 }
 
-bool nob_procs_wait(Nob_Procs procs)
+bool knob_procs_wait(Knob_Procs procs)
 {
     bool success = true;
     for (size_t i = 0; i < procs.count; ++i) {
-        success = nob_proc_wait(procs.items[i]) && success;
+        success = knob_proc_wait(procs.items[i]) && success;
     }
     return success;
 }
 
-bool nob_proc_wait(Nob_Proc proc)
+bool knob_proc_wait(Knob_Proc proc)
 {
-    if (proc == NOB_INVALID_PROC) return false;
+    if (proc == KNOB_INVALID_PROC) return false;
 
 #ifdef _WIN32
     DWORD result = WaitForSingleObject(
@@ -562,18 +566,18 @@ bool nob_proc_wait(Nob_Proc proc)
                    );
 
     if (result == WAIT_FAILED) {
-        nob_log(NOB_ERROR, "could not wait on child process: %lu", GetLastError());
+        knob_log(KNOB_ERROR, "could not wait on child process: %lu", GetLastError());
         return false;
     }
 
     DWORD exit_status;
     if (!GetExitCodeProcess(proc, &exit_status)) {
-        nob_log(NOB_ERROR, "could not get process exit code: %lu", GetLastError());
+        knob_log(KNOB_ERROR, "could not get process exit code: %lu", GetLastError());
         return false;
     }
 
     if (exit_status != 0) {
-        nob_log(NOB_ERROR, "command exited with exit code %lu", exit_status);
+        knob_log(KNOB_ERROR, "command exited with exit code %lu", exit_status);
         return false;
     }
 
@@ -584,14 +588,14 @@ bool nob_proc_wait(Nob_Proc proc)
     for (;;) {
         int wstatus = 0;
         if (waitpid(proc, &wstatus, 0) < 0) {
-            nob_log(NOB_ERROR, "could not wait on command (pid %d): %s", proc, strerror(errno));
+            knob_log(KNOB_ERROR, "could not wait on command (pid %d): %s", proc, strerror(errno));
             return false;
         }
 
         if (WIFEXITED(wstatus)) {
             int exit_status = WEXITSTATUS(wstatus);
             if (exit_status != 0) {
-                nob_log(NOB_ERROR, "command exited with exit code %d", exit_status);
+                knob_log(KNOB_ERROR, "command exited with exit code %d", exit_status);
                 return false;
             }
 
@@ -599,7 +603,7 @@ bool nob_proc_wait(Nob_Proc proc)
         }
 
         if (WIFSIGNALED(wstatus)) {
-            nob_log(NOB_ERROR, "command process was terminated by %s", strsignal(WTERMSIG(wstatus)));
+            knob_log(KNOB_ERROR, "command process was terminated by %s", strsignal(WTERMSIG(wstatus)));
             return false;
         }
     }
@@ -608,36 +612,36 @@ bool nob_proc_wait(Nob_Proc proc)
 #endif
 }
 
-bool nob_cmd_run_sync(Nob_Cmd cmd)
+bool knob_cmd_run_sync(Knob_Cmd cmd)
 {
-    Nob_Proc p = nob_cmd_run_async(cmd);
-    if (p == NOB_INVALID_PROC) return false;
-    return nob_proc_wait(p);
+    Knob_Proc p = knob_cmd_run_async(cmd);
+    if (p == KNOB_INVALID_PROC) return false;
+    return knob_proc_wait(p);
 }
 
-char *nob_shift_args(int *argc, char ***argv)
+char *knob_shift_args(int *argc, char ***argv)
 {
-    NOB_ASSERT(*argc > 0);
+    KNOB_ASSERT(*argc > 0);
     char *result = **argv;
     (*argv) += 1;
     (*argc) -= 1;
     return result;
 }
 
-void nob_log(Nob_Log_Level level, const char *fmt, ...)
+void knob_log(Knob_Log_Level level, const char *fmt, ...)
 {
     switch (level) {
-    case NOB_INFO:
+    case KNOB_INFO:
         fprintf(stderr, "[INFO] ");
         break;
-    case NOB_WARNING:
+    case KNOB_WARNING:
         fprintf(stderr, "[WARNING] ");
         break;
-    case NOB_ERROR:
+    case KNOB_ERROR:
         fprintf(stderr, "[ERROR] ");
         break;
     default:
-        NOB_ASSERT(0 && "unreachable");
+        KNOB_ASSERT(0 && "unreachable");
     }
 
     va_list args;
@@ -647,27 +651,27 @@ void nob_log(Nob_Log_Level level, const char *fmt, ...)
     fprintf(stderr, "\n");
 }
 
-bool nob_read_entire_dir(const char *parent, Nob_File_Paths *children)
+bool knob_read_entire_dir(const char *parent, Knob_File_Paths *children)
 {
     bool result = true;
     DIR *dir = NULL;
 
     dir = opendir(parent);
     if (dir == NULL) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
+        knob_return_defer(false);
     }
 
     errno = 0;
     struct dirent *ent = readdir(dir);
     while (ent != NULL) {
-        nob_da_append(children, nob_temp_strdup(ent->d_name));
+        knob_da_append(children, knob_temp_strdup(ent->d_name));
         ent = readdir(dir);
     }
 
     if (errno != 0) {
-        nob_log(NOB_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
+        knob_return_defer(false);
     }
 
 defer:
@@ -675,14 +679,14 @@ defer:
     return result;
 }
 
-bool nob_write_entire_file(const char *path, void *data, size_t size)
+bool knob_write_entire_file(const char *path, void *data, size_t size)
 {
     bool result = true;
 
     FILE *f = fopen(path, "wb");
     if (f == NULL) {
-        nob_log(NOB_ERROR, "Could not open file %s for writing: %s\n", path, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not open file %s for writing: %s\n", path, strerror(errno));
+        knob_return_defer(false);
     }
 
     //           len
@@ -695,8 +699,8 @@ bool nob_write_entire_file(const char *path, void *data, size_t size)
     while (size > 0) {
         size_t n = fwrite(buf, 1, size, f);
         if (ferror(f)) {
-            nob_log(NOB_ERROR, "Could not write into file %s: %s\n", path, strerror(errno));
-            nob_return_defer(false);
+            knob_log(KNOB_ERROR, "Could not write into file %s: %s\n", path, strerror(errno));
+            knob_return_defer(false);
         }
         size -= n;
         buf  += n;
@@ -707,126 +711,126 @@ defer:
     return result;
 }
 
-Nob_File_Type nob_get_file_type(const char *path)
+Knob_File_Type knob_get_file_type(const char *path)
 {
 #ifdef _WIN32
     DWORD attr = GetFileAttributesA(path);
     if (attr == INVALID_FILE_ATTRIBUTES) {
-        nob_log(NOB_ERROR, "Could not get file attributes of %s: %lu", path, GetLastError());
+        knob_log(KNOB_ERROR, "Could not get file attributes of %s: %lu", path, GetLastError());
         return -1;
     }
 
-    if (attr & FILE_ATTRIBUTE_DIRECTORY) return NOB_FILE_DIRECTORY;
+    if (attr & FILE_ATTRIBUTE_DIRECTORY) return KNOB_FILE_DIRECTORY;
     // TODO: detect symlinks on Windows (whatever that means on Windows anyway)
-    return NOB_FILE_REGULAR;
+    return KNOB_FILE_REGULAR;
 #else // _WIN32
     struct stat statbuf;
     if (stat(path, &statbuf) < 0) {
-        nob_log(NOB_ERROR, "Could not get stat of %s: %s", path, strerror(errno));
+        knob_log(KNOB_ERROR, "Could not get stat of %s: %s", path, strerror(errno));
         return -1;
     }
 
     switch (statbuf.st_mode & S_IFMT) {
-        case S_IFDIR:  return NOB_FILE_DIRECTORY;
-        case S_IFREG:  return NOB_FILE_REGULAR;
-        case S_IFLNK:  return NOB_FILE_SYMLINK;
-        default:       return NOB_FILE_OTHER;
+        case S_IFDIR:  return KNOB_FILE_DIRECTORY;
+        case S_IFREG:  return KNOB_FILE_REGULAR;
+        case S_IFLNK:  return KNOB_FILE_SYMLINK;
+        default:       return KNOB_FILE_OTHER;
     }
 #endif // _WIN32
 }
 
-bool nob_copy_directory_recursively(const char *src_path, const char *dst_path)
+bool knob_copy_directory_recursively(const char *src_path, const char *dst_path)
 {
     bool result = true;
-    Nob_File_Paths children = {0};
-    Nob_String_Builder src_sb = {0};
-    Nob_String_Builder dst_sb = {0};
-    size_t temp_checkpoint = nob_temp_save();
+    Knob_File_Paths children = {0};
+    Knob_String_Builder src_sb = {0};
+    Knob_String_Builder dst_sb = {0};
+    size_t temp_checkpoint = knob_temp_save();
 
-    Nob_File_Type type = nob_get_file_type(src_path);
+    Knob_File_Type type = knob_get_file_type(src_path);
     if (type < 0) return false;
 
     switch (type) {
-        case NOB_FILE_DIRECTORY: {
-            if (!nob_mkdir_if_not_exists(dst_path)) nob_return_defer(false);
-            if (!nob_read_entire_dir(src_path, &children)) nob_return_defer(false);
+        case KNOB_FILE_DIRECTORY: {
+            if (!knob_mkdir_if_not_exists(dst_path)) knob_return_defer(false);
+            if (!knob_read_entire_dir(src_path, &children)) knob_return_defer(false);
 
             for (size_t i = 0; i < children.count; ++i) {
                 if (strcmp(children.items[i], ".") == 0) continue;
                 if (strcmp(children.items[i], "..") == 0) continue;
 
                 src_sb.count = 0;
-                nob_sb_append_cstr(&src_sb, src_path);
-                nob_sb_append_cstr(&src_sb, "/");
-                nob_sb_append_cstr(&src_sb, children.items[i]);
-                nob_sb_append_null(&src_sb);
+                knob_sb_append_cstr(&src_sb, src_path);
+                knob_sb_append_cstr(&src_sb, "/");
+                knob_sb_append_cstr(&src_sb, children.items[i]);
+                knob_sb_append_null(&src_sb);
 
                 dst_sb.count = 0;
-                nob_sb_append_cstr(&dst_sb, dst_path);
-                nob_sb_append_cstr(&dst_sb, "/");
-                nob_sb_append_cstr(&dst_sb, children.items[i]);
-                nob_sb_append_null(&dst_sb);
+                knob_sb_append_cstr(&dst_sb, dst_path);
+                knob_sb_append_cstr(&dst_sb, "/");
+                knob_sb_append_cstr(&dst_sb, children.items[i]);
+                knob_sb_append_null(&dst_sb);
 
-                if (!nob_copy_directory_recursively(src_sb.items, dst_sb.items)) {
-                    nob_return_defer(false);
+                if (!knob_copy_directory_recursively(src_sb.items, dst_sb.items)) {
+                    knob_return_defer(false);
                 }
             }
         } break;
 
-        case NOB_FILE_REGULAR: {
-            if (!nob_copy_file(src_path, dst_path)) {
-                nob_return_defer(false);
+        case KNOB_FILE_REGULAR: {
+            if (!knob_copy_file(src_path, dst_path)) {
+                knob_return_defer(false);
             }
         } break;
 
-        case NOB_FILE_SYMLINK: {
-            nob_log(NOB_WARNING, "TODO: Copying symlinks is not supported yet");
+        case KNOB_FILE_SYMLINK: {
+            knob_log(KNOB_WARNING, "TODO: Copying symlinks is not supported yet");
         } break;
 
-        case NOB_FILE_OTHER: {
-            nob_log(NOB_ERROR, "Unsupported type of file %s", src_path);
-            nob_return_defer(false);
+        case KNOB_FILE_OTHER: {
+            knob_log(KNOB_ERROR, "Unsupported type of file %s", src_path);
+            knob_return_defer(false);
         } break;
 
-        default: NOB_ASSERT(0 && "unreachable");
+        default: KNOB_ASSERT(0 && "unreachable");
     }
 
 defer:
-    nob_temp_rewind(temp_checkpoint);
-    nob_da_free(src_sb);
-    nob_da_free(dst_sb);
-    nob_da_free(children);
+    knob_temp_rewind(temp_checkpoint);
+    knob_da_free(src_sb);
+    knob_da_free(dst_sb);
+    knob_da_free(children);
     return result;
 }
 
-char *nob_temp_strdup(const char *cstr)
+char *knob_temp_strdup(const char *cstr)
 {
     size_t n = strlen(cstr);
-    char *result = nob_temp_alloc(n + 1);
-    NOB_ASSERT(result != NULL && "Increase NOB_TEMP_CAPACITY");
+    char *result = knob_temp_alloc(n + 1);
+    KNOB_ASSERT(result != NULL && "Increase KNOB_TEMP_CAPACITY");
     memcpy(result, cstr, n);
     result[n] = '\0';
     return result;
 }
 
-void *nob_temp_alloc(size_t size)
+void *knob_temp_alloc(size_t size)
 {
-    if (nob_temp_size + size > NOB_TEMP_CAPACITY) return NULL;
-    void *result = &nob_temp[nob_temp_size];
-    nob_temp_size += size;
+    if (knob_temp_size + size > KNOB_TEMP_CAPACITY) return NULL;
+    void *result = &knob_temp[knob_temp_size];
+    knob_temp_size += size;
     return result;
 }
 
-char *nob_temp_sprintf(const char *format, ...)
+char *knob_temp_sprintf(const char *format, ...)
 {
     va_list args;
     va_start(args, format);
     int n = vsnprintf(NULL, 0, format, args);
     va_end(args);
 
-    NOB_ASSERT(n >= 0);
-    char *result = nob_temp_alloc(n + 1);
-    NOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
+    KNOB_ASSERT(n >= 0);
+    char *result = knob_temp_alloc(n + 1);
+    KNOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
     // TODO: use proper arenas for the temporary allocator;
     va_start(args, format);
     vsnprintf(result, n + 1, format, args);
@@ -835,31 +839,31 @@ char *nob_temp_sprintf(const char *format, ...)
     return result;
 }
 
-void nob_temp_reset(void)
+void knob_temp_reset(void)
 {
-    nob_temp_size = 0;
+    knob_temp_size = 0;
 }
 
-size_t nob_temp_save(void)
+size_t knob_temp_save(void)
 {
-    return nob_temp_size;
+    return knob_temp_size;
 }
 
-void nob_temp_rewind(size_t checkpoint)
+void knob_temp_rewind(size_t checkpoint)
 {
-    nob_temp_size = checkpoint;
+    knob_temp_size = checkpoint;
 }
 
-const char *nob_temp_sv_to_cstr(Nob_String_View sv)
+const char *knob_temp_sv_to_cstr(Knob_String_View sv)
 {
-    char *result = nob_temp_alloc(sv.count + 1);
-    NOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
+    char *result = knob_temp_alloc(sv.count + 1);
+    KNOB_ASSERT(result != NULL && "Extend the size of the temporary allocator");
     memcpy(result, sv.data, sv.count);
     result[sv.count] = '\0';
     return result;
 }
 
-int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count)
+int knob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count)
 {
 #ifdef _WIN32
     BOOL bSuccess;
@@ -868,14 +872,14 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
     if (output_path_fd == INVALID_HANDLE_VALUE) {
         // NOTE: if output does not exist it 100% must be rebuilt
         if (GetLastError() == ERROR_FILE_NOT_FOUND) return 1;
-        nob_log(NOB_ERROR, "Could not open file %s: %lu", output_path, GetLastError());
+        knob_log(KNOB_ERROR, "Could not open file %s: %lu", output_path, GetLastError());
         return -1;
     }
     FILETIME output_path_time;
     bSuccess = GetFileTime(output_path_fd, NULL, NULL, &output_path_time);
     CloseHandle(output_path_fd);
     if (!bSuccess) {
-        nob_log(NOB_ERROR, "Could not get time of %s: %lu", output_path, GetLastError());
+        knob_log(KNOB_ERROR, "Could not get time of %s: %lu", output_path, GetLastError());
         return -1;
     }
 
@@ -884,14 +888,14 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
         HANDLE input_path_fd = CreateFile(input_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_READONLY, NULL);
         if (input_path_fd == INVALID_HANDLE_VALUE) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
-            nob_log(NOB_ERROR, "Could not open file %s: %lu", input_path, GetLastError());
+            knob_log(KNOB_ERROR, "Could not open file %s: %lu", input_path, GetLastError());
             return -1;
         }
         FILETIME input_path_time;
         bSuccess = GetFileTime(input_path_fd, NULL, NULL, &input_path_time);
         CloseHandle(input_path_fd);
         if (!bSuccess) {
-            nob_log(NOB_ERROR, "Could not get time of %s: %lu", input_path, GetLastError());
+            knob_log(KNOB_ERROR, "Could not get time of %s: %lu", input_path, GetLastError());
             return -1;
         }
 
@@ -906,7 +910,7 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
     if (stat(output_path, &statbuf) < 0) {
         // NOTE: if output does not exist it 100% must be rebuilt
         if (errno == ENOENT) return 1;
-        nob_log(NOB_ERROR, "could not stat %s: %s", output_path, strerror(errno));
+        knob_log(KNOB_ERROR, "could not stat %s: %s", output_path, strerror(errno));
         return -1;
     }
     int output_path_time = statbuf.st_mtime;
@@ -915,7 +919,7 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
         const char *input_path = input_paths[i];
         if (stat(input_path, &statbuf) < 0) {
             // NOTE: non-existing input is an error cause it is needed for building in the first place
-            nob_log(NOB_ERROR, "could not stat %s: %s", input_path, strerror(errno));
+            knob_log(KNOB_ERROR, "could not stat %s: %s", input_path, strerror(errno));
             return -1;
         }
         int input_path_time = statbuf.st_mtime;
@@ -927,64 +931,64 @@ int nob_needs_rebuild(const char *output_path, const char **input_paths, size_t 
 #endif
 }
 
-int nob_needs_rebuild1(const char *output_path, const char *input_path)
+int knob_needs_rebuild1(const char *output_path, const char *input_path)
 {
-    return nob_needs_rebuild(output_path, &input_path, 1);
+    return knob_needs_rebuild(output_path, &input_path, 1);
 }
 
-bool nob_rename(const char *old_path, const char *new_path)
+bool knob_rename(const char *old_path, const char *new_path)
 {
-    nob_log(NOB_INFO, "renaming %s -> %s", old_path, new_path);
+    knob_log(KNOB_INFO, "renaming %s -> %s", old_path, new_path);
 #ifdef _WIN32
     if (!MoveFileEx(old_path, new_path, MOVEFILE_REPLACE_EXISTING)) {
-        nob_log(NOB_ERROR, "could not rename %s to %s: %lu", old_path, new_path, GetLastError());
+        knob_log(KNOB_ERROR, "could not rename %s to %s: %lu", old_path, new_path, GetLastError());
         return false;
     }
 #else
     if (rename(old_path, new_path) < 0) {
-        nob_log(NOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, strerror(errno));
+        knob_log(KNOB_ERROR, "could not rename %s to %s: %s", old_path, new_path, strerror(errno));
         return false;
     }
 #endif // _WIN32
     return true;
 }
 
-bool nob_read_entire_file(const char *path, Nob_String_Builder *sb)
+bool knob_read_entire_file(const char *path, Knob_String_Builder *sb)
 {
     bool result = true;
     size_t buf_size = 32*1024;
-    char *buf = NOB_REALLOC(NULL, buf_size);
-    NOB_ASSERT(buf != NULL && "Buy more RAM lool!!");
+    char *buf = KNOB_REALLOC(NULL, buf_size);
+    KNOB_ASSERT(buf != NULL && "Buy more RAM lool!!");
     FILE *f = fopen(path, "rb");
     if (f == NULL) {
-        nob_log(NOB_ERROR, "Could not open %s for reading: %s", path, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not open %s for reading: %s", path, strerror(errno));
+        knob_return_defer(false);
     }
 
     size_t n = fread(buf, 1, buf_size, f);
     while (n > 0) {
-        nob_sb_append_buf(sb, buf, n);
+        knob_sb_append_buf(sb, buf, n);
         n = fread(buf, 1, buf_size, f);
     }
     if (ferror(f)) {
-        nob_log(NOB_ERROR, "Could not read %s: %s\n", path, strerror(errno));
-        nob_return_defer(false);
+        knob_log(KNOB_ERROR, "Could not read %s: %s\n", path, strerror(errno));
+        knob_return_defer(false);
     }
 
 defer:
-    NOB_FREE(buf);
+    KNOB_FREE(buf);
     if (f) fclose(f);
     return result;
 }
 
-Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
+Knob_String_View knob_sv_chop_by_delim(Knob_String_View *sv, char delim)
 {
     size_t i = 0;
     while (i < sv->count && sv->data[i] != delim) {
         i += 1;
     }
 
-    Nob_String_View result = nob_sv_from_parts(sv->data, i);
+    Knob_String_View result = knob_sv_from_parts(sv->data, i);
 
     if (i < sv->count) {
         sv->count -= i + 1;
@@ -997,45 +1001,45 @@ Nob_String_View nob_sv_chop_by_delim(Nob_String_View *sv, char delim)
     return result;
 }
 
-Nob_String_View nob_sv_from_parts(const char *data, size_t count)
+Knob_String_View knob_sv_from_parts(const char *data, size_t count)
 {
-    Nob_String_View sv;
+    Knob_String_View sv;
     sv.count = count;
     sv.data = data;
     return sv;
 }
 
-Nob_String_View nob_sv_trim_left(Nob_String_View sv)
+Knob_String_View knob_sv_trim_left(Knob_String_View sv)
 {
     size_t i = 0;
     while (i < sv.count && isspace(sv.data[i])) {
         i += 1;
     }
 
-    return nob_sv_from_parts(sv.data + i, sv.count - i);
+    return knob_sv_from_parts(sv.data + i, sv.count - i);
 }
 
-Nob_String_View nob_sv_trim_right(Nob_String_View sv)
+Knob_String_View knob_sv_trim_right(Knob_String_View sv)
 {
     size_t i = 0;
     while (i < sv.count && isspace(sv.data[sv.count - 1 - i])) {
         i += 1;
     }
 
-    return nob_sv_from_parts(sv.data, sv.count - i);
+    return knob_sv_from_parts(sv.data, sv.count - i);
 }
 
-Nob_String_View nob_sv_trim(Nob_String_View sv)
+Knob_String_View knob_sv_trim(Knob_String_View sv)
 {
-    return nob_sv_trim_right(nob_sv_trim_left(sv));
+    return knob_sv_trim_right(knob_sv_trim_left(sv));
 }
 
-Nob_String_View nob_sv_from_cstr(const char *cstr)
+Knob_String_View knob_sv_from_cstr(const char *cstr)
 {
-    return nob_sv_from_parts(cstr, strlen(cstr));
+    return knob_sv_from_parts(cstr, strlen(cstr));
 }
 
-bool nob_sv_eq(Nob_String_View a, Nob_String_View b)
+bool knob_sv_eq(Knob_String_View a, Knob_String_View b)
 {
     if (a.count != b.count) {
         return false;
@@ -1048,7 +1052,7 @@ bool nob_sv_eq(Nob_String_View a, Nob_String_View b)
 //  0 - file does not exists
 //  1 - file exists
 // -1 - error while checking if file exists. The error is logged
-int nob_file_exists(const char *file_path)
+int knob_file_exists(const char *file_path)
 {
 #if _WIN32
     // TODO: distinguish between "does not exists" and other errors
@@ -1058,7 +1062,7 @@ int nob_file_exists(const char *file_path)
     struct stat statbuf;
     if (stat(file_path, &statbuf) < 0) {
         if (errno == ENOENT) return 0;
-        nob_log(NOB_ERROR, "Could not check if file %s exists: %s", file_path, strerror(errno));
+        knob_log(KNOB_ERROR, "Could not check if file %s exists: %s", file_path, strerror(errno));
         return -1;
     }
     return 1;
