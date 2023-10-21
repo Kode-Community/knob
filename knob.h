@@ -39,6 +39,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
+#define _BSD_SOURCE
+#elif defined(__linux__)
+#define _GNU_SOURCE
+#endif
 #include <string.h>
 #include <errno.h>
 #include <ctype.h>
@@ -51,15 +56,20 @@
 #else
 #    include <sys/types.h>
 #    include <sys/wait.h>
-#    include <sys/stat.h>
 #    include <unistd.h>
 #    include <fcntl.h>
+#define __USE_MISC
+#    include <sys/stat.h>
 #endif
 
 #ifdef _WIN32
 #    define KNOB_LINE_END "\r\n"
+#    define PATH_SEP "\\"
+#    define DLL_NAME ".dll"
 #else
 #    define KNOB_LINE_END "\n"
+#    define PATH_SEP "/"
+#    define DLL_NAME ".so"
 #endif
 
 #define KNOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
@@ -220,6 +230,9 @@ int knob_needs_rebuild(const char *output_path, const char **input_paths, size_t
 int knob_needs_rebuild1(const char *output_path, const char *input_path);
 int knob_file_exists(const char *file_path);
 
+int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass);
+// int knob_get_submodule()
+
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
 #ifndef KNOB_REBUILD_URSELF
 #  if _WIN32
@@ -233,6 +246,14 @@ int knob_file_exists(const char *file_path);
 #  else
 #    define KNOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
 #  endif
+#endif
+typedef int (*submodule_entrypoint)(Knob_Cmd* /*project_name##_link_files*/, int /*argc*/,char** /*argv*/);
+#ifdef KNOB_SUBMODULE
+#define MAIN(project_name) \
+ static char* proj_name = #project_name; \
+ int project_name##_entrypoint(Knob_Cmd* project_name##_link_files, int argc,char** argv)
+#else
+#define MAIN(project_name) int main(int argc,char** argv)
 #endif
 
 // Go Rebuild Urself™ Technology
@@ -372,7 +393,45 @@ int closedir(DIR *dirp);
 
 #endif // KNOB_H_
 
-#ifdef KNOB_IMPLEMENTATION
+// dynlib.h HEADER BEGIN ////////////////////////////////////////
+// Copyright 2023 Jean-Sébastien Nadeau <mundusnine@gmail.com>
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// ============================================================
+/*
+* Single-header library for dynamic library loading
+* Define in only one .c or .cpp file DYNLIB_IMPL
+*/
+
+static char dynlib_last_err[256] = {0};
+typedef void (*func_ptr)(void);
+
+void* dynlib_load(const char *dllfile);
+int dynlib_unload(void *handle);
+func_ptr dynlib_loadfunc(void *handle, const char *name);
+
+// dynlib.h HEADER END ////////////////////////////////////////
+
+// && !defined(KNOB_SUBMODULE) 
+#if defined(KNOB_IMPLEMENTATION)
 
 static size_t knob_temp_size = 0;
 static char knob_temp[KNOB_TEMP_CAPACITY] = {0};
@@ -1069,6 +1128,57 @@ int knob_file_exists(const char *file_path)
 #endif
 }
 
+int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass){
+    Knob_Cmd cmd = {0};
+    knob_cmd_append(&cmd, "zig","cc");
+    knob_cmd_append(&cmd, "-shared");
+    knob_cmd_append(&cmd, "-fPIC");
+    knob_cmd_append(&cmd, "--debug", "-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
+    knob_cmd_append(&cmd,"-I.");
+    // knob_cmd_append(&cmd, "-target");
+    // knob_cmd_append(&cmd, "x86_64-linux-musl");
+    size_t path_len = strlen(path);
+    char* sep = path[path_len-1] == PATH_SEP[0] ? "" : PATH_SEP;
+
+    char project_name[64] = {0};
+    int i = path_len-2;
+    while(path[i] != PATH_SEP[0] ){
+        i--;
+    }
+    i++;
+    char* sub = &path[i];
+    strcpy(project_name,sub);
+    if(strlen(sep) == 0){//@TESTMEBABY
+        project_name[path_len - i  - 1] = '\0';
+    }
+
+    char temp[260] = {0};
+    char cFile[260] = {0};
+    snprintf(cFile,260,"%s%sknob.c",path,sep);
+    knob_cmd_append(&cmd,cFile);
+
+    knob_cmd_append(&cmd, "-DKNOB_SUBMODULE");
+    int n = snprintf(temp,260,"%s%s%s%s",path,sep,project_name,DLL_NAME);
+    knob_cmd_append(&cmd,"-o",temp);
+    if(!knob_cmd_run_sync(cmd)) return 0;
+    sleep(1);//@TODO make this cross-platform.
+    void* dll_handle = dynlib_load(temp);
+    if(dll_handle == NULL) return 0;
+    
+    memset(temp,0,n);
+    n = snprintf(temp,260,"%s_entrypoint",project_name);
+    submodule_entrypoint func = (submodule_entrypoint)dynlib_loadfunc(dll_handle,temp);
+    
+    memset(temp,0,n);
+    getcwd(temp,260);
+    chdir(path);
+    if(!func(files_to_link,cmd_to_pass->count,cmd_to_pass->items)) return 0;
+    chdir(temp);
+    
+    return 1;
+    
+}
+
 // minirent.h SOURCE BEGIN ////////////////////////////////////////
 #ifdef _WIN32
 struct DIR
@@ -1153,5 +1263,146 @@ int closedir(DIR *dirp)
 }
 #endif // _WIN32
 // minirent.h SOURCE END ////////////////////////////////////////
+
+// dynlib.h SOURCE BEGIN ////////////////////////////////////////
+#if defined(__WIN32)
+#include <stdlib.h>
+
+static LPWSTR utfconv_utf8towc(const char *str) {
+  LPWSTR output;
+  int len;
+
+  // len includes \0
+  len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+  if (len == 0)
+    return NULL;
+
+  output = (LPWSTR) malloc(sizeof(WCHAR) * len);
+  if (output == NULL)
+    return NULL;
+
+  len = MultiByteToWideChar(CP_UTF8, 0, str, -1, output, len);
+  if (len == 0) {
+    free(output);
+    return NULL;
+  }
+
+  return output;
+}
+
+void *dynlib_load(const char *dllfile){
+    void *handle;
+    LPWSTR wstr;
+
+    if (dllfile == NULL) {
+        setbuf(stderr,dynlib_last_err);
+        fprintf(stderr,"Param dllfile can't be NULL.");
+        return NULL;
+    }
+    wstr = utfconv_utf8towc(dllfile);
+#ifdef __WINRT__
+    handle = (void *)LoadPackagedLibrary(wstr, 0);
+#else
+    handle = (void *)LoadLibrary(wstr);
+#endif
+    free(wstr);
+
+    if (handle == NULL) {
+        fprintf(stderr,"Failed loading %s",dllfile);
+    }
+    return handle;
+}
+void dynlib_unload(void *handle){
+    if (handle != NULL) {
+        FreeLibrary((HMODULE)handle);
+    }
+}
+func_ptr dynlib_loadfunc(void *handle, const char *name){
+    void *symbol = (void *)GetProcAddress((HMODULE)handle, name);
+    if(symbol == NULL){
+        setbuf(stderr,dynlib_last_err);
+        fprintf(stderr,"Failed loading func %s",name);
+    }
+    return (func_ptr)symbol;
+}
+#else
+#if defined(__linux__)
+#define __USE_GNU
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <link.h>
+#else
+// #define _BSD_SOURCE // If it doesn't compile, just uncomment and see.(musllibc based)
+#include <dlfcn.h>// FreeBSD usually.
+#endif
+
+static size_t d_count = 0;
+static void* addr;
+int print_library_info(struct dl_phdr_info* info, size_t size, void* data)
+{
+    if (info->dlpi_name[0] != '\0') {
+        void* handle = dlopen(info->dlpi_name, RTLD_NOW | RTLD_NOLOAD);
+        if (handle != NULL) {
+          // if(strcmp(info->dlpi_name,"./engine.so") == 0){
+          //   d_count = info->dlpi_phdr[0].p_memsz;
+          //   addr = (void*)info->dlpi_addr;
+          // }
+          dynlib_unload(handle);
+          const char *error = dlerror();
+          if (error != NULL) {
+              fprintf(stderr, "Error unloading library %s: %s\n",info->dlpi_name,error);
+          }
+          else {
+            printf("Unloaded: %s\n",info->dlpi_name);
+          }
+        }
+    }
+    return 0;
+}
+
+void *dynlib_load(const char *dllfile)
+{
+    void *handle;
+
+    handle = dlopen(dllfile, RTLD_NOW /*| RTLD_LOCAL*/);
+    if (handle == NULL) {
+        setbuf(stderr,dynlib_last_err);
+        fprintf(stderr,"Failed loading %s: %s", dllfile, dlerror());
+        setbuf(stderr,NULL);
+    }
+    return handle;
+}
+
+int dynlib_unload(void *handle)
+{
+    if (handle != NULL) {
+        int count =-1;
+        Dl_info info;
+        int result = 0;
+        while(dlinfo(handle,RTLD_DI_LINKMAP,&info) == 0 && result == 0){
+            result = dlclose(handle);
+            count++;
+        }
+        return count ==1;
+    }
+    return 0;
+}
+
+func_ptr dynlib_loadfunc(void *handle, const char *name)
+{
+    void *symbol = dlsym(handle, name);
+    if (symbol == NULL) {
+        char _name[128] = {0};
+        snprintf(_name,128,"_%s",name);
+        symbol = dlsym(handle, _name);
+        if (symbol == NULL) {
+            setbuf(stderr,dynlib_last_err);
+            fprintf(stderr,"Failed loading %s: %s\n", name, dlerror());
+        }
+    }
+    return (func_ptr)symbol;
+}
+#endif
+// dynlib.h SOURCE END ////////////////////////////////////////
 
 #endif

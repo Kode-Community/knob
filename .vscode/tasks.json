@@ -13,9 +13,8 @@
                 "--debug",
                 "-fno-sanitize=undefined",
                 "-fno-omit-frame-pointer",
-                "-target",
-                "x86_64-unknown-linux-musl",
-                "knob.c",
+                "-I${workspaceFolder}",
+                "${workspaceFolder}/examples/submodule/knob.c",
                 "-o",
                 "knob"
             ],

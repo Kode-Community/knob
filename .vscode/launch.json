@@ -15,13 +15,13 @@
         "preLaunchTask": "Build app"
       },
       {
-        "name": "(nob) Launch",
+        "name": "(knob) Launch",
         "type": "cppdbg",
         "request": "launch",
         "program": "${workspaceFolder}/knob",
         "args": [],
         "stopAtEntry": false,
-        "cwd": "${workspaceRoot}",
+        "cwd": "${workspaceRoot}/examples/submodule",
         "preLaunchTask": "Build knob"
       }
     ]

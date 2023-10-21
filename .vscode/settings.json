@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "bitset": "c",
+        "knob.h": "c",
+        "vector": "c",
+        "dlfcn.h": "c",
+        "unistd.h": "c",
+        "cstdint": "c"
+    }
+}
