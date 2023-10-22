@@ -5,6 +5,8 @@
         "vector": "c",
         "dlfcn.h": "c",
         "unistd.h": "c",
-        "cstdint": "c"
+        "cstdint": "c",
+        "time.h": "c",
+        "string.h": "c"
     }
 }

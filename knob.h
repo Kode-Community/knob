@@ -41,8 +41,10 @@
 #include <stdarg.h>
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
 #define _BSD_SOURCE
+#define _XOPEN_SOURCE 700
 #elif defined(__linux__)
 #define _GNU_SOURCE
+#define _XOPEN_SOURCE 700
 #endif
 #include <string.h>
 #include <errno.h>
@@ -430,7 +432,8 @@ func_ptr dynlib_loadfunc(void *handle, const char *name);
 
 // dynlib.h HEADER END ////////////////////////////////////////
 
-// && !defined(KNOB_SUBMODULE) 
+int knob_sleep_ms(int milliseconds);
+
 #if defined(KNOB_IMPLEMENTATION)
 
 static size_t knob_temp_size = 0;
@@ -1135,8 +1138,6 @@ int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd
     knob_cmd_append(&cmd, "-fPIC");
     knob_cmd_append(&cmd, "--debug", "-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
     knob_cmd_append(&cmd,"-I.");
-    // knob_cmd_append(&cmd, "-target");
-    // knob_cmd_append(&cmd, "x86_64-linux-musl");
     size_t path_len = strlen(path);
     char* sep = path[path_len-1] == PATH_SEP[0] ? "" : PATH_SEP;
 
@@ -1146,9 +1147,9 @@ int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd
         i--;
     }
     i++;
-    char* sub = &path[i];
+    const char* sub = &path[i];
     strcpy(project_name,sub);
-    if(strlen(sep) == 0){//@TESTMEBABY
+    if(strlen(sep) == 0){
         project_name[path_len - i  - 1] = '\0';
     }
 
@@ -1161,7 +1162,7 @@ int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd
     int n = snprintf(temp,260,"%s%s%s%s",path,sep,project_name,DLL_NAME);
     knob_cmd_append(&cmd,"-o",temp);
     if(!knob_cmd_run_sync(cmd)) return 0;
-    sleep(1);//@TODO make this cross-platform.
+    knob_sleep_ms(500);
     void* dll_handle = dynlib_load(temp);
     if(dll_handle == NULL) return 0;
     
@@ -1172,7 +1173,7 @@ int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd
     memset(temp,0,n);
     getcwd(temp,260);
     chdir(path);
-    if(!func(files_to_link,cmd_to_pass->count,cmd_to_pass->items)) return 0;
+    if(!func(files_to_link,cmd_to_pass->count,(char**)cmd_to_pass->items)) return 0;
     chdir(temp);
     
     return 1;
@@ -1404,5 +1405,37 @@ func_ptr dynlib_loadfunc(void *handle, const char *name)
 }
 #endif
 // dynlib.h SOURCE END ////////////////////////////////////////
+
+// sleep_ms SOURCE START //////////////////////////////////////
+
+#ifndef WIN32
+#ifdef __GLIBC__
+#define __USE_MISC
+#else // musl
+#define _GNU_SOURCE 
+#endif
+#if _POSIX_C_SOURCE >= 199309L
+#include <time.h>   // for nanosleep
+#else
+#include <unistd.h> // for usleep
+#endif
+
+#endif
+
+int knob_sleep_ms(int milliseconds){ // cross-platform sleep function
+#ifdef WIN32
+    return Sleep(milliseconds);
+#elif _POSIX_C_SOURCE >= 199309L
+    struct timespec ts;
+    ts.tv_sec = milliseconds / 1000;
+    ts.tv_nsec = (milliseconds % 1000) * 1000000;
+    return nanosleep(&ts, NULL);
+#else
+    if (milliseconds >= 1000)
+      sleep(milliseconds / 1000);
+    return usleep((milliseconds % 1000) * 1000);
+#endif
+}
+// sleep_ms SOURCE END //////////////////////////////////////
 
 #endif

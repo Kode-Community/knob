@@ -1,5 +1,5 @@
 #define KNOB_IMPLEMENTATION
-#include "knob.h"
+#include "../../knob.h"
 
 
 MAIN(basic){
@@ -13,7 +13,6 @@ MAIN(basic){
     #ifdef KNOB_SUBMODULE
     knob_cmd_append(&cmd,"-o", "sailor.o");
     knob_cmd_append(basic_link_files,"sailor.o");
-    knob_cmd_append(basic_link_files,"jailer.o");
     #else
     knob_cmd_append(&cmd,"-o", "sailor");
     #endif
@@ -25,4 +24,5 @@ MAIN(basic){
     knob_cmd_run_sync(cmd);
     #endif
 
+    return 0;
 }

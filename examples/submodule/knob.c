@@ -1,6 +1,12 @@
 #define KNOB_IMPLEMENTATION
 #include "knob.h"
 
+// WARNING /////////////////////////////////////////////
+// When using SUBMODULE's on Linux, don't compile knob.c
+// with musl. SUBMODULE's need dynamic loading and musl
+// doesn't allow it. On Alpine you might be able to
+// simply link with libdl and load the dynamic lib. 
+////////////////////////////////////////////////////////
 
 MAIN(test){
     Knob_Cmd cmd = {0};
