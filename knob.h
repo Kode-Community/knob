@@ -1266,7 +1266,7 @@ int closedir(DIR *dirp)
 // minirent.h SOURCE END ////////////////////////////////////////
 
 // dynlib.h SOURCE BEGIN ////////////////////////////////////////
-#if defined(__WIN32)
+#if defined(_WIN32)
 #include <stdlib.h>
 
 static LPWSTR utfconv_utf8towc(const char *str) {
@@ -1313,10 +1313,11 @@ void *dynlib_load(const char *dllfile){
     }
     return handle;
 }
-void dynlib_unload(void *handle){
+int dynlib_unload(void *handle){
     if (handle != NULL) {
-        FreeLibrary((HMODULE)handle);
+        return FreeLibrary((HMODULE)handle);
     }
+    return 0;
 }
 func_ptr dynlib_loadfunc(void *handle, const char *name){
     void *symbol = (void *)GetProcAddress((HMODULE)handle, name);
@@ -1424,7 +1425,9 @@ func_ptr dynlib_loadfunc(void *handle, const char *name)
 
 int knob_sleep_ms(int milliseconds){ // cross-platform sleep function
 #ifdef WIN32
-    return Sleep(milliseconds);
+    DWORD milli = (DWORD)milliseconds;
+    Sleep(milli);
+    return 1;
 #elif _POSIX_C_SOURCE >= 199309L
     struct timespec ts;
     ts.tv_sec = milliseconds / 1000;
