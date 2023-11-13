@@ -90,6 +90,9 @@ void knob_log(Knob_Log_Level level, const char *fmt, ...);
 // argument from the beginning.
 char *knob_shift_args(int *argc, char ***argv);
 
+int knob_cstr_match(char* left, char* right);
+int knob_cstr_ends(char* str, char* end);
+
 typedef struct {
     const char **items;
     size_t count;
@@ -688,6 +691,32 @@ char *knob_shift_args(int *argc, char ***argv)
     (*argv) += 1;
     (*argc) -= 1;
     return result;
+}
+
+int knob_cstr_match(char* left, char* right){
+    int i =0;
+    while(left[i] != '\0' && right[i] != '\0'){
+        if(left[i] != right[i]){
+            return 0;
+        }
+        ++i;
+    }
+    if(left[i] != '\0' || right[i] != '\0')
+        return 0;
+    return 1;
+}
+
+int knob_cstr_ends(char* str, char* end){
+    int e_len = strlen(end);
+    int s_len = strlen(str);
+    int i =1;
+    while(e_len-i > -1){
+        if(str[s_len-i] != end[e_len-i]){
+            return 0;
+        }
+        i++;
+    } 
+    return 1;
 }
 
 void knob_log(Knob_Log_Level level, const char *fmt, ...)
