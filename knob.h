@@ -235,7 +235,7 @@ int knob_needs_rebuild(const char *output_path, const char **input_paths, size_t
 int knob_needs_rebuild1(const char *output_path, const char *input_path);
 int knob_file_exists(const char *file_path);
 
-int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass);
+int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh);
 // int knob_get_submodule()
 
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
@@ -1160,14 +1160,29 @@ int knob_file_exists(const char *file_path)
 #endif
 }
 
-int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass){
+int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh){
     Knob_Cmd cmd = {0};
     knob_cmd_append(&cmd, "zig","cc");
-    knob_cmd_append(&cmd, "-shared");
+    knob_cmd_append(&cmd, "-dynamiclib");
+    #ifdef __linux__// @TODO: Try and remove this on linux, let's see if it still works. We really start adding tests to this.
     knob_cmd_append(&cmd, "-fPIC");
+    #endif
     knob_cmd_append(&cmd, "--debug", "-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
-    knob_cmd_append(&cmd,"-I.");
-    size_t path_len = strlen(path);
+    knob_cmd_append(&cmd,knob_temp_sprintf("-I%s",path_to_knobh));
+    int path_len = strlen(path);
+    #ifdef _WIN32
+    char temp_path[260] = {0};
+    int y = -1;
+    while(y < path_len){
+        ++y;
+        if(path[y] == '/'){
+            temp_path[y] = PATH_SEP[0];
+            continue;
+        }
+        temp_path[y] = path[y];
+    }
+    path = temp_path;
+    #endif
     char* sep = path[path_len-1] == PATH_SEP[0] ? "" : PATH_SEP;
 
     char project_name[64] = {0};
@@ -1322,23 +1337,31 @@ static LPWSTR utfconv_utf8towc(const char *str) {
 
 void *dynlib_load(const char *dllfile){
     void *handle;
-    LPWSTR wstr;
 
     if (dllfile == NULL) {
         setbuf(stderr,dynlib_last_err);
         fprintf(stderr,"Param dllfile can't be NULL.");
+        setbuf(stderr,NULL);
         return NULL;
     }
-    wstr = utfconv_utf8towc(dllfile);
 #ifdef __WINRT__
+    LPWSTR wstr;//@TODO: test this I guess... a UWP thing.
+    wstr = utfconv_utf8towc(dllfile);
     handle = (void *)LoadPackagedLibrary(wstr, 0);
-#else
-    handle = (void *)LoadLibrary(wstr);
-#endif
     free(wstr);
-
+#else
+    handle = (void *)LoadLibraryA(dllfile);
+#endif
     if (handle == NULL) {
-        fprintf(stderr,"Failed loading %s",dllfile);
+        LPVOID errMsg;
+        FormatMessageA(
+            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+            NULL,GetLastError(),0,(LPSTR)&errMsg,0,NULL);
+        strcpy(dynlib_last_err,errMsg);
+        setbuf(stderr,dynlib_last_err);
+        fprintf(stderr,"Failed loading %s: %s", dllfile, errMsg);
+        setbuf(stderr,NULL);
+        LocalFree(errMsg);
     }
     return handle;
 }
