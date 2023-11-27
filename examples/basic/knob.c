@@ -1,3 +1,4 @@
+#define KNOB_SUBMODULE
 #define KNOB_IMPLEMENTATION
 #include "../../knob.h"
 
@@ -12,7 +13,7 @@ MAIN(basic){
     knob_cmd_append(&cmd,"main.c");
     #ifdef KNOB_SUBMODULE
     knob_cmd_append(&cmd,"-o", "sailor.o");
-    knob_cmd_append(basic_link_files,"sailor.o");
+    knob_da_append(basic_link_files,"sailor.o");
     #else
     knob_cmd_append(&cmd,"-o", "sailor");
     #endif

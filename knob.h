@@ -235,7 +235,47 @@ int knob_needs_rebuild(const char *output_path, const char **input_paths, size_t
 int knob_needs_rebuild1(const char *output_path, const char *input_path);
 int knob_file_exists(const char *file_path);
 
-int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh);
+typedef enum {
+    TARGET_LINUX,
+    TARGET_LINUX_MUSL,
+    TARGET_WIN64_MINGW,
+    TARGET_WIN64_MSVC,
+    TARGET_MACOS,
+
+    COUNT_TARGETS
+} Knob_Target;
+
+static_assert(5 == COUNT_TARGETS, "Amount of targets have changed");
+const char *target_names[] = {
+    [TARGET_LINUX]       = "linux",
+    [TARGET_WIN64_MINGW] = "win64-mingw",
+    [TARGET_WIN64_MSVC]  = "win64-msvc",
+    [TARGET_MACOS]       = "macos",
+};
+
+
+typedef enum {
+    COMPILER_ZIG,
+    COMPILER_CLANG,
+    COMPILER_GCC,
+    COMPILER_CL,
+    COUNT_COMPILERS
+} Knob_Compiler;
+
+static_assert(4 == COUNT_COMPILERS, "Amount of targets have changed");
+const char *target_names[] = {
+    [COMPILER_ZIG]      = "zig",
+    [COMPILER_CLANG]    = "clang",
+    [COMPILER_GCC]      = "gcc",
+    [COMPILER_CL]       = "cl.exe",
+};
+
+typedef struct {
+    Knob_Target target;
+    Knob_Compiler compiler;
+} Knob_Config;
+
+int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Paths* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh);
 // int knob_get_submodule()
 
 // TODO: add MinGW support for Go Rebuild Urself™ Technology
@@ -252,11 +292,11 @@ int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd
 #    define KNOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
 #  endif
 #endif
-typedef int (*submodule_entrypoint)(Knob_Cmd* /*project_name##_link_files*/, int /*argc*/,char** /*argv*/);
+typedef int (*submodule_entrypoint)(Knob_Config* /*parent_config*/, Knob_File_Paths* /*project_name##_link_files*/, int /*argc*/,char** /*argv*/);
 #ifdef KNOB_SUBMODULE
 #define MAIN(project_name) \
  static char* proj_name = #project_name; \
- int project_name##_entrypoint(Knob_Cmd* project_name##_link_files, int argc,char** argv)
+ int project_name##_entrypoint(Knob_Config* parent_config, Knob_File_Paths* project_name##_link_files, int argc,char** argv)
 #else
 #define MAIN(project_name) int main(int argc,char** argv)
 #endif
@@ -1160,14 +1200,42 @@ int knob_file_exists(const char *file_path)
 #endif
 }
 
-int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh){
+bool knob_compute_default_config(Knob_Config *config)
+{
+    memset(config, 0, sizeof(Knob_Config));
+#ifdef _WIN32
+#   if defined(_MSC_VER)
+        config->target = TARGET_WIN64_MSVC;
+        config->compiler = COMPILER_CL;
+#   else
+        config->target = TARGET_WIN64_MINGW;
+        config->compiler = COMPILER_GCC;
+#   endif
+#else
+#   if defined (__APPLE__) || defined (__MACH__)
+        config->target = TARGET_MACOS;
+        config->compiler = COMPILER_CLANG;
+#   else
+        config->target = TARGET_LINUX;
+        config->compiler = COMPILER_GCC;
+#   endif
+#endif
+    return true;
+}
+
+
+int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Paths* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh){
     Knob_Cmd cmd = {0};
-    knob_cmd_append(&cmd, "zig","cc");
-    knob_cmd_append(&cmd, "-dynamiclib");
-    #ifdef __linux__// @TODO: Try and remove this on linux, let's see if it still works. We really start adding tests to this.
-    knob_cmd_append(&cmd, "-fPIC");
-    #endif
-    knob_cmd_append(&cmd, "--debug", "-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
+    knob_cmd_append(&cmd, GET_COMPILER_NAME(config->compiler));
+    if(config->target == TARGET_LINUX || config->target == TARGET_LINUX_MUSL){// @TODO: Should we add Mingw for plugins ?
+        knob_cmd_append(&cmd, "-dynamiclib","-fPIC");
+        if(config->compiler == COMPILER_CLANG || config->compiler == COMPILER_GCC){
+            knob_cmd_append(&cmd, "-ggdb3");
+        }
+    }
+    if(config->compiler == COMPILER_ZIG){
+        knob_cmd_append(&cmd, "--debug", "-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
+    }
     knob_cmd_append(&cmd,knob_temp_sprintf("-I%s",path_to_knobh));
     int path_len = strlen(path);
     #ifdef _WIN32
@@ -1217,7 +1285,7 @@ int knob_compile_run_submodule(const char* path,Knob_Cmd* files_to_link,Knob_Cmd
     memset(temp,0,n);
     getcwd(temp,260);
     chdir(path);
-    if(!func(files_to_link,cmd_to_pass->count,(char**)cmd_to_pass->items)) return 0;
+    if(!func(config,files_to_link,cmd_to_pass->count,(char**)cmd_to_pass->items)) return 0;
     chdir(temp);
     
     return 1;

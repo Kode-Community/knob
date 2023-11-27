@@ -9,13 +9,17 @@
 ////////////////////////////////////////////////////////
 
 MAIN(test){
+    Knob_Config config = {0};
+    knob_compute_default_config(&config);
+    config.compiler = COMPILER_ZIG;
     Knob_Cmd cmd = {0};
     // START Compile submodule
-    Knob_Cmd files_to_link = {0};
+    Knob_File_Paths object_files = {0};
     Knob_Cmd pass_cmds = {0};
-    knob_compile_run_submodule("../basic",&files_to_link,&pass_cmds);
-    for(int i =0; i < files_to_link.count;++i){
-        char* temp = files_to_link.items[i];
+    char* path_to_knobh = "../..";
+    knob_compile_run_submodule("../basic",&config,&object_files,&pass_cmds,path_to_knobh);
+    for(int i =0; i < object_files.count;++i){
+        char* temp = object_files.items[i];
         knob_log(KNOB_INFO,"%s",temp);
         continue;
     }
