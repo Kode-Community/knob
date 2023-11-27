@@ -248,6 +248,7 @@ typedef enum {
 static_assert(5 == COUNT_TARGETS, "Amount of targets have changed");
 const char *target_names[] = {
     [TARGET_LINUX]       = "linux",
+    [TARGET_LINUX_MUSL]  = "linux-musl",
     [TARGET_WIN64_MINGW] = "win64-mingw",
     [TARGET_WIN64_MSVC]  = "win64-msvc",
     [TARGET_MACOS]       = "macos",
@@ -262,13 +263,15 @@ typedef enum {
     COUNT_COMPILERS
 } Knob_Compiler;
 
-static_assert(4 == COUNT_COMPILERS, "Amount of targets have changed");
-const char *target_names[] = {
-    [COMPILER_ZIG]      = "zig",
-    [COMPILER_CLANG]    = "clang",
-    [COMPILER_GCC]      = "gcc",
-    [COMPILER_CL]       = "cl.exe",
+static_assert(4 == COUNT_COMPILERS, "Amount of compilers have changed");
+const char *compiler_names[][2] = {
+    [COMPILER_ZIG]      = {"zig","cc"},
+    [COMPILER_CLANG]    = {"clang","-L/dev/null"},
+    [COMPILER_GCC]      = {"gcc","-L/dev/null"},
+    [COMPILER_CL]       = {"cl.exe","-L."},
 };
+#define GET_COMPILER_NAME(cmp) compiler_names[cmp][0] ,compiler_names[cmp][1]
+
 
 typedef struct {
     Knob_Target target;
