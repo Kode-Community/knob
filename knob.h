@@ -60,7 +60,9 @@
 #    include <sys/wait.h>
 #    include <unistd.h>
 #    include <fcntl.h>
+#ifndef __USE_MISC
 #define __USE_MISC
+#endif
 #    include <sys/stat.h>
 #endif
 
@@ -246,7 +248,7 @@ typedef enum {
 } Knob_Target;
 
 static_assert(5 == COUNT_TARGETS, "Amount of targets have changed");
-const char *target_names[] = {
+static const char *target_names[] = {
     [TARGET_LINUX]       = "linux",
     [TARGET_LINUX_MUSL]  = "linux-musl",
     [TARGET_WIN64_MINGW] = "win64-mingw",
@@ -256,6 +258,7 @@ const char *target_names[] = {
 
 
 typedef enum {
+    COMPILER_COSMOCC,
     COMPILER_ZIG,
     COMPILER_CLANG,
     COMPILER_GCC,
@@ -263,8 +266,9 @@ typedef enum {
     COUNT_COMPILERS
 } Knob_Compiler;
 
-static_assert(4 == COUNT_COMPILERS, "Amount of compilers have changed");
-const char *compiler_names[][2] = {
+static_assert(5 == COUNT_COMPILERS, "Amount of compilers have changed");
+static const char *compiler_names[][2] = {
+    [COMPILER_COSMOCC]      = {"cosmocc","-L."},
     [COMPILER_ZIG]      = {"zig","cc"},
     [COMPILER_CLANG]    = {"clang","-L/dev/null"},
     [COMPILER_GCC]      = {"gcc","-L/dev/null"},
@@ -272,28 +276,37 @@ const char *compiler_names[][2] = {
 };
 #define GET_COMPILER_NAME(cmp) compiler_names[cmp][0] ,compiler_names[cmp][1]
 
+#define CONFIG_PATH "./build/config.h"
+#define PLUG_PATH "./build/plug.h"
 
 typedef struct {
     Knob_Target target;
     Knob_Compiler compiler;
 } Knob_Config;
 
+void knob_create_default_config(const char* project_name,Knob_String_Builder *content,Knob_Cmd* user_conf);
+void knob_create_plug(void);
+//@TODO: Add reload_plug_here
 int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Paths* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh);
 // int knob_get_submodule()
 
-// TODO: add MinGW support for Go Rebuild Urself™ Technology
-#ifndef KNOB_REBUILD_URSELF
+#ifndef CC
+#  define CC_PATH ""
 #  if _WIN32
 #    if defined(__GNUC__)
-#       define KNOB_REBUILD_URSELF(binary_path, source_path) "gcc", "-o", binary_path, source_path
+#       define CC "gcc"
 #    elif defined(__clang__)
-#       define KNOB_REBUILD_URSELF(binary_path, source_path) "clang", "-o", binary_path, source_path
+#       define CC "clang"
 #    elif defined(_MSC_VER)
-#       define KNOB_REBUILD_URSELF(binary_path, source_path) "cl.exe", source_path
+#       define CC "cl.exe"
 #    endif
 #  else
-#    define KNOB_REBUILD_URSELF(binary_path, source_path) "cc", "-o", binary_path, source_path
+#   define CC "cc"
 #  endif
+#endif
+// TODO: add MinGW support for Go Rebuild Urself™ Technology
+#ifndef KNOB_REBUILD_URSELF
+#define KNOB_REBUILD_URSELF(binary_path, source_path) CC_PATH CC, "-o", binary_path, source_path
 #endif
 typedef int (*submodule_entrypoint)(Knob_Config* /*parent_config*/, Knob_File_Paths* /*project_name##_link_files*/, int /*argc*/,char** /*argv*/);
 #ifdef KNOB_SUBMODULE
@@ -474,7 +487,7 @@ typedef void (*func_ptr)(void);
 
 void* dynlib_load(const char *dllfile);
 int dynlib_unload(void *handle);
-func_ptr dynlib_loadfunc(void *handle, const char *name);
+void* dynlib_loadfunc(void *handle, const char *name);
 
 // dynlib.h HEADER END ////////////////////////////////////////
 
@@ -1226,6 +1239,104 @@ bool knob_compute_default_config(Knob_Config *config)
     return true;
 }
 
+void knob_create_default_config(const char* project_name,Knob_String_Builder *content,Knob_Cmd* user_conf)
+{
+    knob_sb_append_cstr(content, "//// Build target. Pick only one!\n");
+#ifdef _WIN32
+#   if defined(_MSC_VER)
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_LINUX\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_LINUX_MUSL\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_WIN64_MINGW\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("#define %s_TARGET TARGET_WIN64_MSVC\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_MACOS\n",project_name));
+#   else
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_LINUX\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("#define %s_TARGET TARGET_WIN64_MINGW\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_WIN64_MSVC\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_MACOS\n",project_name));
+#   endif
+#else
+#   if defined (__APPLE__) || defined (__MACH__)
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_LINUX\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_LINUX_MUSL\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_WIN64_MINGW\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_WIN64_MSVC\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("#define %s_TARGET TARGET_MACOS\n",project_name));
+#   else
+    knob_sb_append_cstr(content, knob_temp_sprintf("#define %s_TARGET TARGET_LINUX\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_LINUX_MUSL\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_WIN64_MINGW\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_WIN64_MSVC\n",project_name));
+    knob_sb_append_cstr(content, knob_temp_sprintf("// #define %s_TARGET TARGET_MACOS\n",project_name));
+#   endif
+#endif
+    knob_sb_append_cstr(content, "//// Build compiler. Pick only one!\n");
+    knob_sb_append_cstr(content,"#ifdef CC\n");
+    knob_sb_append_cstr(content,"#undef CC\n");
+    knob_sb_append_cstr(content,"#endif\n");
+    #ifdef _WIN32
+#   if defined(_MSC_VER)
+    knob_sb_append_cstr(content, "// #define CC COMPILER_COSMOCC\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_ZIG\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_GCC\n");
+    knob_sb_append_cstr(content, "#define CC COMPILER_CL\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_CLANG\n");
+#   else
+    knob_sb_append_cstr(content, "// #define CC COMPILER_COSMOCC\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_ZIG\n");
+    knob_sb_append_cstr(content, "#define CC COMPILER_GCC\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_CL\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_CLANG\n");
+#   endif
+#else
+#   if defined (__APPLE__) || defined (__MACH__)
+    knob_sb_append_cstr(content, "// #define CC COMPILER_COSMOCC\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_ZIG\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_GCC\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_CL\n");
+    knob_sb_append_cstr(content, "#define CC COMPILER_CLANG\n");
+#   else
+    knob_sb_append_cstr(content, "// #define CC COMPILER_COSMOCC\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_ZIG\n");
+    knob_sb_append_cstr(content, "#define CC COMPILER_GCC\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_CL\n");
+    knob_sb_append_cstr(content, "// #define CC COMPILER_CLANG\n");
+#   endif
+#endif
+    knob_sb_append_cstr(content,"//For the crazy people that version their C compiler :)\n");
+    knob_sb_append_cstr(content,"#ifdef CC_PATH\n");
+    knob_sb_append_cstr(content,"#undef CC_PATH\n");
+    knob_sb_append_cstr(content,"#endif\n");
+    knob_sb_append_cstr(content,"#define CC_PATH \"\"\n");
+    knob_sb_append_cstr(content, "\n");
+    knob_sb_append_cstr(content, "//// Moves everything in src/plug.c to a separate \"DLL\" so it can be hotreloaded. Works only for Linux right now\n");
+    knob_sb_append_cstr(content, "// #define KNOB_HOTRELOAD\n");
+    knob_sb_append_cstr(content, "\n");
+    knob_sb_append_cstr(content, "//// PROJECT SPECIFIC CONFIGS.\n");
+    for(int i =0; i < user_conf->count; ++i){
+        const char* config = user_conf->items[i];
+        knob_sb_append_cstr(content,config);
+        knob_sb_append_cstr(content, "\n");
+    }
+}
+
+void knob_create_plug(void){
+const char default_source[] = 
+"#pragma once\n\n"
+"//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+"//~~~IMPORTANT~~~~: User applications need to define the actual struct Plug in their own code.\n"
+"//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+"typedef struct Plug Plug_t;\n"
+"#define LIST_OF_PLUGS \\\n"
+"    PLUG(plug_init, void, void) \\\n"
+"    PLUG(plug_pre_reload, void*, void) \\\n"
+"    PLUG(plug_post_reload, void, void*) \\\n"
+"    PLUG(plug_update, void, void)\n\n"
+"#define PLUG(name, ret, ...) typedef ret (name##_t)(__VA_ARGS__);\n"
+"LIST_OF_PLUGS\n"
+"#undef PLUG\n";
+    knob_write_entire_file(PLUG_PATH,(void*)default_source,strlen(default_source));
+}
 
 int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Paths* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh){
     Knob_Cmd cmd = {0};
@@ -1442,13 +1553,13 @@ int dynlib_unload(void *handle){
     }
     return 0;
 }
-func_ptr dynlib_loadfunc(void *handle, const char *name){
+void* dynlib_loadfunc(void *handle, const char *name){
     void *symbol = (void *)GetProcAddress((HMODULE)handle, name);
     if(symbol == NULL){
         setbuf(stderr,dynlib_last_err);
         fprintf(stderr,"Failed loading func %s",name);
     }
-    return (func_ptr)symbol;
+    return symbol;
 }
 #else
 #if defined(__linux__)
@@ -1461,29 +1572,29 @@ func_ptr dynlib_loadfunc(void *handle, const char *name){
 #include <dlfcn.h>// FreeBSD usually.
 #endif
 
-static size_t d_count = 0;
-static void* addr;
-int print_library_info(struct dl_phdr_info* info, size_t size, void* data)
-{
-    if (info->dlpi_name[0] != '\0') {
-        void* handle = dlopen(info->dlpi_name, RTLD_NOW | RTLD_NOLOAD);
-        if (handle != NULL) {
-          // if(strcmp(info->dlpi_name,"./engine.so") == 0){
-          //   d_count = info->dlpi_phdr[0].p_memsz;
-          //   addr = (void*)info->dlpi_addr;
-          // }
-          dynlib_unload(handle);
-          const char *error = dlerror();
-          if (error != NULL) {
-              fprintf(stderr, "Error unloading library %s: %s\n",info->dlpi_name,error);
-          }
-          else {
-            printf("Unloaded: %s\n",info->dlpi_name);
-          }
-        }
-    }
-    return 0;
-}
+// static size_t d_count = 0;
+// static void* addr;
+// int print_library_info(struct dl_phdr_info* info, size_t size, void* data)
+// {
+//     if (info->dlpi_name[0] != '\0') {
+//         void* handle = dlopen(info->dlpi_name, RTLD_NOW | RTLD_NOLOAD);
+//         if (handle != NULL) {
+//           // if(strcmp(info->dlpi_name,"./engine.so") == 0){
+//           //   d_count = info->dlpi_phdr[0].p_memsz;
+//           //   addr = (void*)info->dlpi_addr;
+//           // }
+//           dynlib_unload(handle);
+//           const char *error = dlerror();
+//           if (error != NULL) {
+//               fprintf(stderr, "Error unloading library %s: %s\n",info->dlpi_name,error);
+//           }
+//           else {
+//             printf("Unloaded: %s\n",info->dlpi_name);
+//           }
+//         }
+//     }
+//     return 0;
+// }
 
 void *dynlib_load(const char *dllfile)
 {
@@ -1500,20 +1611,21 @@ void *dynlib_load(const char *dllfile)
 
 int dynlib_unload(void *handle)
 {
-    if (handle != NULL) {
-        int count =-1;
-        Dl_info info;
-        int result = 0;
-        while(dlinfo(handle,RTLD_DI_LINKMAP,&info) == 0 && result == 0){
-            result = dlclose(handle);
-            count++;
-        }
-        return count ==1;
-    }
-    return 0;
+    // if (handle != NULL) {
+    //     int count =-1;
+    //     Dl_info info;
+    //     int result = 0;
+    //     while(dlinfo(handle,RTLD_DI_LINKMAP,&info) == 0 && result == 0){
+    //         result = dlclose(handle);
+    //         count++;
+    //     }
+    //     return count ==1;
+    // }
+    int res = dlclose(handle);
+    return res == 0;
 }
 
-func_ptr dynlib_loadfunc(void *handle, const char *name)
+void* dynlib_loadfunc(void *handle, const char *name)
 {
     void *symbol = dlsym(handle, name);
     if (symbol == NULL) {
@@ -1525,7 +1637,7 @@ func_ptr dynlib_loadfunc(void *handle, const char *name)
             fprintf(stderr,"Failed loading %s: %s\n", name, dlerror());
         }
     }
-    return (func_ptr)symbol;
+    return symbol;
 }
 #endif
 // dynlib.h SOURCE END ////////////////////////////////////////
@@ -1533,17 +1645,14 @@ func_ptr dynlib_loadfunc(void *handle, const char *name)
 // sleep_ms SOURCE START //////////////////////////////////////
 
 #ifndef WIN32
-#ifdef __GLIBC__
-#define __USE_MISC
-#else // musl
-#define _GNU_SOURCE 
-#endif
-#if _POSIX_C_SOURCE >= 199309L
-#include <time.h>   // for nanosleep
-#else
-#include <unistd.h> // for usleep
-#endif
-
+  #ifndef __GLIBC__// musl
+      #define _GNU_SOURCE 
+  #endif
+  #if _POSIX_C_SOURCE >= 199309L
+      #include <time.h>   // for nanosleep
+  #else
+      #include <unistd.h> // for usleep
+  #endif
 #endif
 
 int knob_sleep_ms(int milliseconds){ // cross-platform sleep function
