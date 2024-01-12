@@ -55,7 +55,9 @@
 #    include <windows.h>
 #    include <direct.h>
 #    include <shellapi.h>
+typedef HANDLE Knob_Fd;
 #else
+typedef int Knob_Fd;
 #    include <sys/types.h>
 #    include <sys/wait.h>
 #    include <unistd.h>
@@ -75,6 +77,13 @@
 #    define PATH_SEP "/"
 #    define DLL_NAME ".so"
 #endif
+
+typedef struct {
+    Knob_Fd read;
+    Knob_Fd write;
+} Knob_Pipe;
+
+Knob_Pipe knob_pipe_make(void);
 
 #define KNOB_ARRAY_LEN(array) (sizeof(array)/sizeof(array[0]))
 #define KNOB_ARRAY_GET(array, index) \
@@ -216,7 +225,7 @@ void knob_cmd_render(Knob_Cmd cmd, Knob_String_Builder *render);
 #define knob_cmd_free(cmd) KNOB_FREE(cmd.items)
 
 // Run command asynchronously
-Knob_Proc knob_cmd_run_async(Knob_Cmd cmd);
+Knob_Proc knob_cmd_run_async(Knob_Cmd cmd, Knob_Fd *fdin, Knob_Fd *fdout);
 
 // Run command synchronously
 bool knob_cmd_run_sync(Knob_Cmd cmd);
@@ -596,20 +605,8 @@ void knob_cmd_render(Knob_Cmd cmd, Knob_String_Builder *render)
     }
 }
 
-Knob_Proc knob_cmd_run_async(Knob_Cmd cmd)
+Knob_Proc knob_cmd_run_async(Knob_Cmd cmd, Knob_Fd *fdin, Knob_Fd *fdout)
 {
-    if (cmd.count < 1) {
-        knob_log(KNOB_ERROR, "Could not run empty command");
-        return KNOB_INVALID_PROC;
-    }
-
-    Knob_String_Builder sb = {0};
-    knob_cmd_render(cmd, &sb);
-    knob_sb_append_null(&sb);
-    knob_log(KNOB_INFO, "CMD: %s", sb.items);
-    knob_sb_free(sb);
-    memset(&sb, 0, sizeof(sb));
-
 #ifdef _WIN32
     // https://docs.microsoft.com/en-us/windows/win32/procthread/creating-a-child-process-with-redirected-input-and-output
 
@@ -618,25 +615,34 @@ Knob_Proc knob_cmd_run_async(Knob_Cmd cmd)
     siStartInfo.cb = sizeof(STARTUPINFO);
     // NOTE: theoretically setting NULL to std handles should not be a problem
     // https://docs.microsoft.com/en-us/windows/console/getstdhandle?redirectedfrom=MSDN#attachdetach-behavior
-    // TODO: check for errors in GetStdHandle
     siStartInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-    siStartInfo.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-    siStartInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    // TODO(#32): check for errors in GetStdHandle
+    siStartInfo.hStdOutput = fdout ? *fdout : GetStdHandle(STD_OUTPUT_HANDLE);
+    siStartInfo.hStdInput = fdin ? *fdin : GetStdHandle(STD_INPUT_HANDLE);
     siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
     PROCESS_INFORMATION piProcInfo;
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
 
-    // TODO: use a more reliable rendering of the command instead of cmd_render
-    // cmd_render is for logging primarily
-    knob_cmd_render(cmd, &sb);
-    knob_sb_append_null(&sb);
-    BOOL bSuccess = CreateProcessA(NULL, sb.items, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo);
-    knob_sb_free(sb);
+    BOOL bSuccess =
+        CreateProcess(
+            NULL,
+            // TODO(#33): cmd_run_async on Windows does not render command line properly
+            // It may require wrapping some arguments with double-quotes if they contains spaces, etc.
+            cstr_array_join(" ", cmd.line),
+            NULL,
+            NULL,
+            TRUE,
+            0,
+            NULL,
+            NULL,
+            &siStartInfo,
+            &piProcInfo
+        );
 
     if (!bSuccess) {
-        knob_log(KNOB_ERROR, "Could not create child process: %lu", GetLastError());
-        return KNOB_INVALID_PROC;
+        knob_log(KNOB_ERROR,"Could not create child process %s: %s\n",
+              cmd_show(cmd), GetLastErrorAsString());
     }
 
     CloseHandle(piProcInfo.hThread);
@@ -645,8 +651,7 @@ Knob_Proc knob_cmd_run_async(Knob_Cmd cmd)
 #else
     pid_t cpid = fork();
     if (cpid < 0) {
-        knob_log(KNOB_ERROR, "Could not fork child process: %s", strerror(errno));
-        return KNOB_INVALID_PROC;
+        knob_log(KNOB_ERROR,"Could not fork child process: %s",strerror(errno));
     }
 
     if (cpid == 0) {
@@ -656,15 +661,28 @@ Knob_Proc knob_cmd_run_async(Knob_Cmd cmd)
         knob_da_append_many(&cmd_null, cmd.items, cmd.count);
         knob_cmd_append(&cmd_null, NULL);
 
+        if (fdin) {
+            if (dup2(*fdin, STDIN_FILENO) < 0) {
+                knob_log(KNOB_ERROR,"Could not setup stdin for child process: %s", strerror(errno));
+            }
+            close(*fdin);
+        }
+
+        if (fdout) {
+            if (dup2(*fdout, STDOUT_FILENO) < 0) {
+                knob_log(KNOB_ERROR,"Could not setup stdout for child process: %s", strerror(errno));
+            }
+            close(*fdout);
+        }
+
         if (execvp(cmd.items[0], (char * const*) cmd_null.items) < 0) {
             knob_log(KNOB_ERROR, "Could not exec child process: %s", strerror(errno));
             exit(1);
         }
-        KNOB_ASSERT(0 && "unreachable");
     }
 
     return cpid;
-#endif
+#endif // _WIN32
 }
 
 bool knob_procs_wait(Knob_Procs procs)
@@ -735,7 +753,7 @@ bool knob_proc_wait(Knob_Proc proc)
 
 bool knob_cmd_run_sync(Knob_Cmd cmd)
 {
-    Knob_Proc p = knob_cmd_run_async(cmd);
+    Knob_Proc p = knob_cmd_run_async(cmd,NULL,NULL);
     if (p == KNOB_INVALID_PROC) return false;
     return knob_proc_wait(p);
 }
@@ -773,6 +791,105 @@ int knob_cstr_ends(char* str, char* end){
         i++;
     } 
     return 1;
+}
+Knob_Pipe knob_pipe_make(void)
+{
+    Knob_Pipe pip = {0};
+
+#ifdef _WIN32
+    // https://docs.microsoft.com/en-us/windows/win32/ProcThread/creating-a-child-process-with-redirected-input-and-output
+
+    SECURITY_ATTRIBUTES saAttr = {0};
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+
+    if (!CreatePipe(&pip.read, &pip.write, &saAttr, 0)) {
+        knob_log(KNOB_ERROR,"Could not create pipe: %s", GetLastErrorAsString());
+    }
+#else
+    Knob_Fd pipefd[2];
+    if (pipe(pipefd) < 0) {
+        knob_log(KNOB_ERROR,"Could not create pipe: %s", strerror(errno));
+    }
+
+    pip.read = pipefd[0];
+    pip.write = pipefd[1];
+#endif // _WIN32
+
+    return pip;
+}
+
+Knob_Fd knob_fd_open_for_read(const char* path)
+{
+#ifndef _WIN32
+    Knob_Fd result = open(path, O_RDONLY);
+    if (result < 0) {
+        knob_log(KNOB_ERROR,"Could not open file %s: %s", path, strerror(errno));
+    }
+    return result;
+#else
+    // https://docs.microsoft.com/en-us/windows/win32/fileio/opening-a-file-for-reading-or-writing
+    SECURITY_ATTRIBUTES saAttr = {0};
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+
+    Knob_Fd result = CreateFile(
+                    path,
+                    GENERIC_READ,
+                    0,
+                    &saAttr,
+                    OPEN_EXISTING,
+                    FILE_ATTRIBUTE_READONLY,
+                    NULL);
+
+    if (result == INVALID_HANDLE_VALUE) {
+        knob_log(KNOB_ERROR,"Could not open file %s", path);
+    }
+
+    return result;
+#endif // _WIN32
+}
+
+Knob_Fd knob_fd_open_for_write(const char* path)
+{
+#ifndef _WIN32
+    Knob_Fd result = open(path,
+                     O_WRONLY | O_CREAT | O_TRUNC,
+                     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (result < 0) {
+        knob_log(KNOB_ERROR,"could not open file %s: %s", path, strerror(errno));
+    }
+    return result;
+#else
+    SECURITY_ATTRIBUTES saAttr = {0};
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+
+    Knob_Fd result = CreateFile(
+                    path,                  // name of the write
+                    GENERIC_WRITE,         // open for writing
+                    0,                     // do not share
+                    &saAttr,               // default security
+                    CREATE_NEW,            // create new file only
+                    FILE_ATTRIBUTE_NORMAL, // normal file
+                    NULL                   // no attr. template
+                );
+
+    if (result == INVALID_HANDLE_VALUE) {
+        knob_log(KNOB_ERROR,"Could not open file %s: %s", path, GetLastErrorAsString());
+    }
+
+    return result;
+#endif // _WIN32
+}
+
+void knob_fd_close(Knob_Fd fd)
+{
+#ifdef _WIN32
+    CloseHandle(fd);
+#else
+    close(fd);
+#endif // _WIN32
 }
 
 void knob_log(Knob_Log_Level level, const char *fmt, ...)
