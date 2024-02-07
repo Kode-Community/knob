@@ -245,6 +245,7 @@ bool knob_rename(const char *old_path, const char *new_path);
 int knob_needs_rebuild(const char *output_path, const char **input_paths, size_t input_paths_count);
 int knob_needs_rebuild1(const char *output_path, const char *input_path);
 int knob_file_exists(const char *file_path);
+int knob_file_del(const char *file_path);
 
 typedef enum {
     TARGET_LINUX,
@@ -1331,6 +1332,21 @@ int knob_file_exists(const char *file_path)
     }
     return 1;
 #endif
+}
+
+// RETURNS:
+//  0 - file was not deleted
+//  1 - file was deleted
+int knob_file_del(const char *file_path){
+    #if _WIN32
+    assert(0 && "TODO: Not implemented");
+    #else
+    int res = remove(file_path);
+    if(res != 0){
+        knob_log(KNOB_ERROR, "Could not delete file %s : %s", file_path, strerror(errno));
+    }
+    return  res == 0;
+    #endif
 }
 
 bool knob_compute_default_config(Knob_Config *config)
