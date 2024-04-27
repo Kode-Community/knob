@@ -43,10 +43,18 @@
 #define _BSD_SOURCE
 #define _XOPEN_SOURCE 700
 #elif defined(__linux__)
+// @TODO: The fact that we need to do this to remove warnings is just crazy, i.e. wth linux
+// We need to test this with cosmocc
+#ifndef __USE_XOPEN2K8
+#define __USE_XOPEN2K8
+#endif 
+#include <string.h>
+#undef __USE_XOPEN2K8
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #define _XOPEN_SOURCE 700
 #endif
-#include <string.h>
 #include <errno.h>
 #include <ctype.h>
 
@@ -60,8 +68,12 @@ typedef HANDLE Knob_Fd;
 typedef int Knob_Fd;
 #    include <sys/types.h>
 #    include <sys/wait.h>
-#    include <unistd.h>
 #    include <fcntl.h>
+// @TODO: The fact that we need to do this to remove warnings is just crazy, i.e. wth linux
+// We need to test this with cosmocc
+#define __USE_XOPEN_EXTENDED
+#    include <unistd.h>
+#undef __USE_XOPEN_EXTENDED
 #ifndef __USE_MISC
 #define __USE_MISC
 #endif
@@ -76,6 +88,10 @@ typedef int Knob_Fd;
 #    define KNOB_LINE_END "\n"
 #    define PATH_SEP "/"
 #    define DLL_NAME ".so"
+#endif
+
+#ifdef __cplusplus
+extern "C"{
 #endif
 
 typedef struct {
@@ -102,7 +118,7 @@ void knob_log(Knob_Log_Level level, const char *fmt, ...);
 char *knob_shift_args(int *argc, char ***argv);
 
 int knob_cstr_match(char* left, char* right);
-int knob_cstr_ends(char* str, char* end);
+int knob_cstr_ends(char* str, const char* end);
 
 typedef struct {
     const char **items;
@@ -220,6 +236,8 @@ void knob_cmd_render(Knob_Cmd cmd, Knob_String_Builder *render);
 
 #define knob_cmd_append(cmd, ...) \
     knob_da_append_many(cmd, ((const char*[]){__VA_ARGS__}), (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)))
+#define knob_da_mult_append(da, ...) \
+    knob_da_append_many(da, ((const char*[]){__VA_ARGS__}), (sizeof((const char*[]){__VA_ARGS__})/sizeof(const char*)))
 
 // Free all the memory allocated by command arguments
 #define knob_cmd_free(cmd) KNOB_FREE(cmd.items)
@@ -246,6 +264,7 @@ int knob_needs_rebuild(const char *output_path, const char **input_paths, size_t
 int knob_needs_rebuild1(const char *output_path, const char *input_path);
 int knob_file_exists(const char *file_path);
 int knob_file_del(const char *file_path);
+int knob_path_is_dir(const char *path);
 
 typedef enum {
     TARGET_LINUX,
@@ -278,25 +297,70 @@ typedef enum {
 
 static_assert(5 == COUNT_COMPILERS, "Amount of compilers have changed");
 static const char *compiler_names[][2] = {
-    [COMPILER_COSMOCC]      = {"cosmocc","-L."},
+    [COMPILER_COSMOCC]  = {"cosmocc","-L."},
     [COMPILER_ZIG]      = {"zig","cc"},
     [COMPILER_CLANG]    = {"clang","-L/dev/null"},
     [COMPILER_GCC]      = {"gcc","-L/dev/null"},
     [COMPILER_CL]       = {"cl.exe","-L."},
 };
+static const char *compilerpp_names[][2] = {
+    [COMPILER_COSMOCC]  = {"cosmoc++","-L."},
+    [COMPILER_ZIG]      = {"zig","c++"},
+    [COMPILER_CLANG]    = {"clang++","-L/dev/null"},
+    [COMPILER_GCC]      = {"g++","-L/dev/null"},
+    [COMPILER_CL]       = {"cl.exe","-L."},
+};
 #define GET_COMPILER_NAME(cmp) compiler_names[cmp][0] ,compiler_names[cmp][1]
+#define GET_COMPILERPP_NAME(cmp) compilerpp_names[cmp][0] ,compilerpp_names[cmp][1]
 
 #define CONFIG_PATH "./build/config.h"
 #define PLUG_PATH "./build/plug.h"
 
+typedef enum {
+    BIN_O,
+    BIN_DLL,
+    BIN_EXE
+} Knob_Binary_out;
+
 typedef struct {
     Knob_Target target;
     Knob_Compiler compiler;
+    int debug_mode;
+    const char* build_to;
+    Knob_Binary_out output_type;
+    Knob_File_Paths c_files;
+    Knob_File_Paths cpp_files;
+    Knob_File_Paths includes;
+    Knob_File_Paths defines;
+    Knob_File_Paths c_flags;
+    Knob_File_Paths cpp_flags;
 } Knob_Config;
 
 void knob_create_default_config(const char* project_name,Knob_String_Builder *content,Knob_Cmd* user_conf);
+
+/*
+* Initialize build config
+*/
+void knob_config_init(Knob_Config *config);
+/*
+* Add a define to the config. It's the users responsibility to add `-D` to the define string
+*/
+void knob_config_add_define(Knob_Config* config,const char* define);
+void knob_config_add_c_flag(Knob_Config* config,const char* flag);
+void knob_config_add_cpp_flag(Knob_Config* config,const char* flag);
+/*
+* Add a define to the config. The implementation adds `-I`.
+*/
+void knob_config_add_includes(Knob_Config* config,const char* filepaths[],size_t len);
+/*
+* Add files with the extensions `*.c` and `*.cpp` to the build config.
+*/
+void knob_config_add_files(Knob_Config* config,const char* filepaths[],size_t len);
+int knob_config_build(Knob_Config* config,Knob_File_Paths* outs);
 void knob_create_plug(void);
 //@TODO: Add reload_plug_here
+void knob_cmd_add_compiler(Knob_Cmd* cmd,Knob_Config* config);
+void knob_cmd_add_includes(Knob_Cmd* cmd,Knob_Config* config);
 int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Paths* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh);
 // int knob_get_submodule()
 
@@ -502,6 +566,10 @@ void* dynlib_loadfunc(void *handle, const char *name);
 // dynlib.h HEADER END ////////////////////////////////////////
 
 int knob_sleep_ms(int milliseconds);
+
+#ifdef __cplusplus
+}
+#endif
 
 #if defined(KNOB_IMPLEMENTATION)
 
@@ -781,7 +849,7 @@ int knob_cstr_match(char* left, char* right){
     return 1;
 }
 
-int knob_cstr_ends(char* str, char* end){
+int knob_cstr_ends(char* str,const char* end){
     int e_len = strlen(end);
     int s_len = strlen(str);
     int i =1;
@@ -1349,28 +1417,29 @@ int knob_file_del(const char *file_path){
     #endif
 }
 
-bool knob_compute_default_config(Knob_Config *config)
+int knob_path_is_dir(const char *path)
 {
-    memset(config, 0, sizeof(Knob_Config));
 #ifdef _WIN32
-#   if defined(_MSC_VER)
-        config->target = TARGET_WIN64_MSVC;
-        config->compiler = COMPILER_CL;
-#   else
-        config->target = TARGET_WIN64_MINGW;
-        config->compiler = COMPILER_GCC;
-#   endif
+    DWORD dwAttrib = GetFileAttributes(path);
+
+    return (dwAttrib != INVALID_FILE_ATTRIBUTES &&
+            (dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
 #else
-#   if defined (__APPLE__) || defined (__MACH__)
-        config->target = TARGET_MACOS;
-        config->compiler = COMPILER_CLANG;
-#   else
-        config->target = TARGET_LINUX;
-        config->compiler = COMPILER_GCC;
-#   endif
-#endif
-    return true;
+    struct stat statbuf = {0};
+    if (stat(path, &statbuf) < 0) {
+        if (errno == ENOENT) {
+            errno = 0;
+            return 0;
+        }
+
+        knob_log(KNOB_ERROR,"could not retrieve information about file %s: %s",
+              path, strerror(errno));
+    }
+
+    return S_ISDIR(statbuf.st_mode);
+#endif // _WIN32
 }
+
 
 void knob_create_default_config(const char* project_name,Knob_String_Builder *content,Knob_Cmd* user_conf)
 {
@@ -1453,6 +1522,166 @@ void knob_create_default_config(const char* project_name,Knob_String_Builder *co
     }
 }
 
+void knob_config_init(Knob_Config *config)
+{
+    memset(config, 0, sizeof(Knob_Config));
+#ifdef _WIN32
+#   if defined(_MSC_VER)
+        config->target = TARGET_WIN64_MSVC;
+        config->compiler = COMPILER_CL;
+#   else
+        config->target = TARGET_WIN64_MINGW;
+        config->compiler = COMPILER_GCC;
+#   endif
+#else
+#   if defined (__APPLE__) || defined (__MACH__)
+        config->target = TARGET_MACOS;
+        config->compiler = COMPILER_CLANG;
+#   else
+        config->target = TARGET_LINUX;
+        config->compiler = COMPILER_GCC;
+#   endif
+#endif
+    config->debug_mode = 1;
+    config->output_type = BIN_EXE;
+    config->build_to = "./build";
+    memset(&config->c_files,0,sizeof(Knob_File_Paths));
+    memset(&config->cpp_files,0,sizeof(Knob_File_Paths));
+    memset(&config->includes,0,sizeof(Knob_File_Paths));
+    memset(&config->defines,0,sizeof(Knob_File_Paths));
+    memset(&config->c_flags,0,sizeof(Knob_File_Paths));
+    memset(&config->cpp_flags,0,sizeof(Knob_File_Paths));
+}
+
+void knob_config_add_define(Knob_Config* config,const char* define){
+    knob_da_append(&config->defines,define);
+}
+
+void knob_config_add_c_flag(Knob_Config* config,const char* flag){
+    knob_da_append(&config->c_flags,flag);
+}
+void knob_config_add_cpp_flag(Knob_Config* config,const char* flag){
+    knob_da_append(&config->cpp_flags,flag);
+}
+
+void knob_config_add_includes(Knob_Config* config,const char* filepaths[],size_t len){
+    for(int i =0; i < len;++i){
+        const char* path = filepaths[i]; 
+        // if(!knob_path_is_dir((char*)path)){
+        //     knob_log(KNOB_ERROR,"Path supplied isn't a directory and can't be added... %s", path);
+        //     exit(1);
+        // }
+        knob_da_append(&config->includes,path);
+    }
+}
+void knob_config_add_files(Knob_Config* config,const char* filepaths[],size_t len){
+    //@TODO: Add filters, so weird people that use cxx or whatever are supported
+    // This would also enable adding objc .m files
+    for(int y =0; y < len;++y){
+        char* path = (char*)filepaths[y]; 
+        if(knob_path_is_dir(path)){
+            Knob_File_Paths childs = {0};
+            knob_read_entire_dir(path,&childs);
+            for(int i =0 ; i < childs.count;++i){
+                char* filename = (char*)childs.items[i];  
+                if(knob_cstr_match(filename,"..") || knob_cstr_match(filename,".")) continue;
+                const char* fname = knob_temp_sprintf("%s"PATH_SEP"%s",path,filename);
+                knob_config_add_files(config,(const char*[]){
+                    fname
+                }, 1);
+            }
+            knob_da_free(childs);
+        }
+        else {
+            if(knob_cstr_ends(path,".cpp")){
+                knob_da_append(&config->cpp_files,path);
+            }
+            else if(knob_cstr_ends(path,".c")){
+                knob_da_append(&config->c_files,path);
+            }
+        }
+    }
+}
+int knob_config_build(Knob_Config* config,Knob_File_Paths* outs){
+    bool result = true;
+    Knob_Cmd cmd = {0};
+    Knob_Procs procs = {0};
+
+    const char* filepath = NULL;
+    const char* config_file = knob_temp_sprintf("%s"PATH_SEP"config.h",config->build_to);
+    
+    for(int i =0; i < config->cpp_files.count;++i){
+        cmd.count = 0;
+        filepath = config->cpp_files.items[i];
+        Knob_String_View sv = {
+            .data = filepath,
+            .count = strlen(filepath)
+        };
+        size_t last_count =0;
+        while(last_count != sv.count && strstr(sv.data,PATH_SEP) != NULL){
+            last_count = sv.count;
+            knob_sv_chop_by_delim(&sv,PATH_SEP[0]);
+        }
+        char* out = knob_temp_sprintf("%s"PATH_SEP"%s.o",config->build_to,sv.count > 0 ?  sv.data : filepath);
+        if(knob_needs_rebuild1(out,filepath) || (knob_file_exists(config_file) && knob_needs_rebuild1(out,config_file))){
+            knob_cmd_append(&cmd,GET_COMPILERPP_NAME(config->compiler));
+            if(config->debug_mode){
+                knob_cmd_append(&cmd, "-ggdb3");
+            }
+            knob_cmd_add_includes(&cmd,config);
+            for(int i=0; i < config->defines.count;++i){
+                knob_cmd_append(&cmd,config->defines.items[i]);
+            }
+            for(int i=0; i < config->cpp_flags.count;++i){
+                knob_cmd_append(&cmd,config->cpp_flags.items[i]);
+            }
+            knob_cmd_append(&cmd, "-c",filepath);
+            knob_cmd_append(&cmd,"-o",out);
+            Knob_Proc proc = knob_cmd_run_async(cmd,NULL,NULL);
+            knob_da_append(&procs, proc);
+        }
+        knob_da_append(outs,out);
+    }
+    for(int i =0; i < config->c_files.count;++i){
+        cmd.count = 0;
+        filepath = config->c_files.items[i];
+        Knob_String_View sv = {
+            .data = filepath,
+            .count = strlen(filepath)
+        };
+        size_t last_count =0;
+        while(last_count != sv.count && strstr(sv.data,PATH_SEP) != NULL){
+            last_count = sv.count;
+            knob_sv_chop_by_delim(&sv,PATH_SEP[0]);
+        }
+        char* out = knob_temp_sprintf("%s"PATH_SEP"%s.o",config->build_to,sv.count > 0 ?  sv.data : filepath);
+        if(knob_needs_rebuild1(out,filepath) || (knob_file_exists(config_file) && knob_needs_rebuild1(out,config_file))){
+            knob_cmd_append(&cmd,GET_COMPILER_NAME(config->compiler));
+            if(config->debug_mode){
+                knob_cmd_append(&cmd, "-ggdb3");
+            }
+            knob_cmd_add_includes(&cmd,config);
+            for(int i=0; i < config->defines.count;++i){
+                knob_cmd_append(&cmd,config->defines.items[i]);
+            }
+            for(int i=0; i < config->c_flags.count;++i){
+                knob_cmd_append(&cmd,config->c_flags.items[i]);
+            }
+            knob_cmd_append(&cmd, "-c",filepath);
+            knob_cmd_append(&cmd,"-o",out);
+            Knob_Proc proc = knob_cmd_run_async(cmd,NULL,NULL);
+            knob_da_append(&procs, proc);
+        }
+        knob_da_append(outs,out);
+    }
+    if (!knob_procs_wait(procs)) knob_return_defer(false);
+
+defer:
+    knob_cmd_free(cmd);
+    return result;
+}
+
+
 void knob_create_plug(void){
 const char default_source[] = 
 "#pragma once\n\n"
@@ -1471,18 +1700,35 @@ const char default_source[] =
     knob_write_entire_file(PLUG_PATH,(void*)default_source,strlen(default_source));
 }
 
-int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Paths* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh){
-    Knob_Cmd cmd = {0};
-    knob_cmd_append(&cmd, GET_COMPILER_NAME(config->compiler));
+void knob_cmd_add_compiler(Knob_Cmd* cmd,Knob_Config* config){
+    knob_cmd_append(cmd, GET_COMPILER_NAME(config->compiler));
     if(config->target == TARGET_LINUX || config->target == TARGET_LINUX_MUSL){// @TODO: Should we add Mingw for plugins ?
-        knob_cmd_append(&cmd, "-dynamiclib","-fPIC");
-        if(config->compiler == COMPILER_CLANG || config->compiler == COMPILER_GCC){
-            knob_cmd_append(&cmd, "-ggdb3");
+        if(config->output_type == BIN_DLL){
+            knob_cmd_append(cmd, "-shared","-fPIC");
+        }
+        if(config->debug_mode && (config->compiler == COMPILER_CLANG || config->compiler == COMPILER_GCC || config->compiler == COMPILER_COSMOCC)){
+            knob_cmd_append(cmd, "-ggdb3");
         }
     }
     if(config->compiler == COMPILER_ZIG){
-        knob_cmd_append(&cmd, "--debug", "-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
+        if(config->debug_mode){
+            knob_cmd_append(cmd,"--debug");
+        }
+        knob_cmd_append(cmd,"-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
     }
+}
+
+void knob_cmd_add_includes(Knob_Cmd* cmd,Knob_Config* config){
+    for(int i=0; i < config->includes.count;++i){
+        knob_cmd_append(cmd,knob_temp_sprintf("-I%s",config->includes.items[i]));
+    }
+}
+
+int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Paths* files_to_link,Knob_Cmd* cmd_to_pass,const char* path_to_knobh){
+    Knob_Cmd cmd = {0};
+    Knob_Config conf = *config;
+    conf.output_type = BIN_DLL;
+    knob_cmd_add_compiler(&cmd,&conf);
     knob_cmd_append(&cmd,knob_temp_sprintf("-I%s",path_to_knobh));
     int path_len = strlen(path);
     #ifdef _WIN32
@@ -1518,7 +1764,7 @@ int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Pa
     knob_cmd_append(&cmd,cFile);
 
     knob_cmd_append(&cmd, "-DKNOB_SUBMODULE");
-    int n = snprintf(temp,260,"%s%s%s%s",path,sep,project_name,DLL_NAME);
+    int n = snprintf(temp,260,"%s%s%s%s","./build",sep,project_name,DLL_NAME);
     knob_cmd_append(&cmd,"-o",temp);
     if(!knob_cmd_run_sync(cmd)) return 0;
     knob_sleep_ms(500);
@@ -1528,11 +1774,14 @@ int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Pa
     memset(temp,0,n);
     n = snprintf(temp,260,"%s_entrypoint",project_name);
     submodule_entrypoint func = (submodule_entrypoint)dynlib_loadfunc(dll_handle,temp);
+    if(func == NULL){
+        exit(1);
+    }
     
     memset(temp,0,n);
     getcwd(temp,260);
     chdir(path);
-    if(!func(config,files_to_link,cmd_to_pass->count,(char**)cmd_to_pass->items)) return 0;
+    if(!func(&conf,files_to_link,cmd_to_pass->count,(char**)cmd_to_pass->items)) return 0;
     chdir(temp);
     
     return 1;
