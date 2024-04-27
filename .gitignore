@@ -1,3 +1,6 @@
 **knob
 **.so
 **.o
+examples/kmake_like/build
+examples/kmake_like/Deployment
+examples/kmake_like/Tools

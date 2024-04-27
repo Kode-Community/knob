@@ -23,7 +23,17 @@
         "stopAtEntry": false,
         "cwd": "${workspaceRoot}/examples/submodule",
         "preLaunchTask": "Build knob"
-      }
+      },
+      {
+        "name": "(knob kmakelike) Launch",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/knob",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${workspaceRoot}/examples/kmake_like",
+        "preLaunchTask": "Build knob kmakelike"
+      },
     ]
         
     

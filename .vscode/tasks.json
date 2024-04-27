@@ -20,6 +20,22 @@
             ],
         },
         {
+            "label": "Build knob kmakelike",
+            "type": "shell",
+            "command": "zig",//"${workspaceFolder}/Tools/windows_x64/zig.exe",
+            "args": [
+                "cc",
+                "-std=c11",
+                "--debug",
+                "-fno-sanitize=undefined",
+                "-fno-omit-frame-pointer",
+                "-I${workspaceFolder}",
+                "${workspaceFolder}/examples/kmake_like/knob.c",
+                "-o",
+                "knob"
+            ],
+        },
+        {
             "label": "Build app",
             "type": "shell",
             "command": "${workspaceFolder}/knob",//"${workspaceFolder}/Tools/windows_x64/zig.exe",
