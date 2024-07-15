@@ -1748,7 +1748,7 @@ int knob_compile_run_submodule(const char* path,Knob_Config* config,Knob_File_Pa
 
     char project_name[64] = {0};
     int i = path_len-2;
-    while(path[i] != PATH_SEP[0] ){
+    while(path[i] != '/' ){
         i--;
     }
     i++;
@@ -1802,14 +1802,20 @@ DIR *opendir(const char *dirpath)
     assert(dirpath);
 
     char buffer[MAX_PATH];
-    snprintf(buffer, MAX_PATH, "%s\\*", dirpath);
+    snprintf(buffer, MAX_PATH, "%s/*", dirpath);
 
     DIR *dir = (DIR*)calloc(1, sizeof(DIR));
-
     dir->hFind = FindFirstFile(buffer, &dir->data);
     if (dir->hFind == INVALID_HANDLE_VALUE) {
         // TODO: opendir should set errno accordingly on FindFirstFile fail
         // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
+        DWORD dwError = GetLastError();
+        printf("FindFirstFile failed with error code: %lu\n", dwError);
+        if(dwError == ERROR_PATH_NOT_FOUND){
+            char cwd[256] = {0};
+            getcwd(cwd,256);
+            printf("The directory path you provided to FindFirstFile does not lead to a valid directory on the system:\n cwd %s \n path %s \n", dwError,cwd,dirpath);
+        }
         errno = ENOSYS;
         goto fail;
     }
