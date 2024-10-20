@@ -33,7 +33,9 @@
 #define KNOB_ASSERT assert
 #define KNOB_REALLOC realloc
 #define KNOB_FREE free
-
+#ifdef _WIN32 // Look mommy, no kiddy wheels....
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 #include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -64,6 +66,15 @@
 #    include <direct.h>
 #    include <shellapi.h>
 typedef HANDLE Knob_Fd;
+#if !defined(__MINGW64__) || !defined(__MINGW32__)
+#define DLL_API __declspec(dllexport)
+#define getcwd(buffer,size) _getcwd(buffer,size)
+#define mkdir(path) _mkdir(path)
+#define chdir(dirname) _chdir(dirname)
+#define strdup(strSource) _strdup(strSource)
+#else
+#define DLL_API
+#endif
 #else
 typedef int Knob_Fd;
 #    include <sys/types.h>
@@ -387,7 +398,7 @@ typedef int (*submodule_entrypoint)(Knob_Config* /*parent_config*/, Knob_File_Pa
 #ifdef KNOB_SUBMODULE
 #define MAIN(project_name) \
  static char* proj_name = #project_name; \
- int project_name##_entrypoint(Knob_Config* parent_config, Knob_File_Paths* project_name##_link_files, int argc,char** argv)
+ DLL_API int project_name##_entrypoint(Knob_Config* parent_config, Knob_File_Paths* project_name##_link_files, int argc,char** argv)
 #else
 #define MAIN(project_name) int main(int argc,char** argv)
 #endif
@@ -1751,7 +1762,7 @@ void knob_cmd_add_compiler(Knob_Cmd* cmd,Knob_Config* config){
             knob_cmd_append(cmd,"--debug");
         }
         if(config->target == TARGET_WIN64_MSVC){
-            knob_cmd_append(cmd,"-target","x86_64-windows");
+            knob_cmd_append(cmd,"-target","x86_64-windows-msvc");
         }
         knob_cmd_append(cmd,"-std=c11", "-fno-sanitize=undefined","-fno-omit-frame-pointer");
     }
@@ -1859,7 +1870,7 @@ DIR *opendir(const char *dirpath)
         if(dwError == ERROR_PATH_NOT_FOUND){
             char cwd[256] = {0};
             getcwd(cwd,256);
-            printf("The directory path you provided to FindFirstFile does not lead to a valid directory on the system:\n cwd %s \n path %s \n", dwError,cwd,dirpath);
+            printf("The directory path you provided to FindFirstFile does not lead to a valid directory on the system:\n cwd %s \n path %s \n",cwd,dirpath);
         }
         errno = ENOSYS;
         goto fail;
@@ -1974,7 +1985,7 @@ void *dynlib_load(const char *dllfile){
             NULL,GetLastError(),0,(LPSTR)&errMsg,0,NULL);
         strcpy(dynlib_last_err,errMsg);
         setbuf(stderr,dynlib_last_err);
-        fprintf(stderr,"Failed loading %s: %s", dllfile, errMsg);
+        fprintf(stderr,"Failed loading %s: %s", dllfile, (LPSTR)errMsg);
         setbuf(stderr,NULL);
         LocalFree(errMsg);
     }
